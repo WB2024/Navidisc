@@ -6,6 +6,7 @@
 
 Navidisc is a Linux-based automation tool that takes your Navidrome (Subsonic) playlists and burns them to one or more physical CDs. It handles playlist resolution, file staging, disc capacity planning, and multi-disc workflows automatically.
 
+
 ## Features
 
 - 🎵 **Subsonic API Integration** - Connect directly to Navidrome or any Subsonic-compatible server
@@ -15,6 +16,8 @@ Navidisc is a Linux-based automation tool that takes your Navidrome (Subsonic) p
 - ⚡ **Efficient Staging** - Uses hardlinks when possible to minimize disk space
 - 🖥️ **Interactive & Headless** - Works interactively or in automated/scripted environments
 - 🔧 **Configurable** - YAML-based configuration with sensible defaults
+- 🎚️ **MP3 Conversion** - Convert FLAC, WAV, and other formats to MP3 with selectable quality (Best, High, Medium, Small) using ffmpeg
+- 🚀 **Intelligent Burn Speed & Media Type** - Choose disc type (CD-R, DVD±R, BD-R, etc.) and let Navidisc auto-calculate the safest or fastest burn speed based on your drive and media
 
 ## Requirements
 
@@ -204,15 +207,21 @@ navidisc config init                     # Create example configuration
 | `--force` | Skip confirmation prompts |
 | `--verbose` / `-v` | Increase output verbosity |
 
+
 ### Burn Options
 
 | Option | Description |
 |--------|-------------|
 | `--disc-type TYPE` | `data` or `audio` |
 | `--device PATH` | Optical drive device |
+| `--media-type TYPE` | Specify media type (e.g. `cd-r-52x`, `dvd-r-16x`, `bd-r-16x`, or `auto`) |
+| `--write-speed PRESET` | Burn speed: `auto` (recommended), `max`, `safe`, or `custom` |
+| `--custom-speed X` | Custom speed multiplier (e.g. `16` for 16x) |
+| `--conversion-quality Q` | Audio conversion quality: `best`, `high`, `medium`, `small`, or `disabled` |
 | `--no-verify` | Skip post-burn verification |
 | `--no-eject` | Don't eject disc after burn |
 | `--output-plan FILE` | Save burn plan to JSON |
+
 
 ## Configuration
 
@@ -231,7 +240,9 @@ burning:
   disc_type: data                 # data or audio
   disc_size_mb: 700               # Data disc capacity (MB)
   audio_disc_minutes: 80          # Audio disc capacity (minutes)
-  write_speed: null               # null for auto, or specific speed
+  media_type: auto                # auto, cd-r-52x, dvd-r-16x, bd-r-16x, etc.
+  write_speed: auto               # auto, max, safe, custom
+  custom_speed: null              # integer (e.g. 16 for 16x), only if write_speed: custom
   verify_after_burn: true         # Verify disc after burning
   eject_after_burn: true          # Eject disc when done
 
@@ -241,6 +252,7 @@ media:
   use_hardlinks: true             # Use hardlinks to save space
   normalize_filenames: true       # Clean filenames for disc
   include_track_numbers: true     # Prefix with 01, 02, etc.
+  conversion_quality: disabled    # best, high, medium, small, or disabled
 
 logging:
   level: INFO                     # DEBUG, INFO, WARNING, ERROR
@@ -354,6 +366,28 @@ The orchestrator manages these states:
 | `VERIFYING` | Verifying burned disc |
 | `COMPLETE` | All discs burned successfully |
 | `ERROR` | Error occurred (see logs) |
+
+
+## File Conversion
+
+Navidisc can automatically convert FLAC, WAV, and other lossless formats to MP3 for burning. You can select the conversion quality in the web UI or CLI:
+
+- **Best**: 320kbps CBR (highest quality)
+- **High**: 256kbps CBR
+- **Medium**: 192kbps CBR (good balance)
+- **Small**: 128kbps CBR (smallest size)
+- **Disabled**: No conversion (original files used)
+
+Conversion uses ffmpeg and preserves metadata. Conversion is performed before staging and burning.
+
+## Burn Speed & Media Type
+
+Navidisc lets you select the disc media type (CD-R, DVD±R, BD-R, etc.) and burn speed preset:
+
+- **Media Type**: Choose from CD-R 52x, DVD-R 16x, BD-R 16x, etc., or use `auto` to detect automatically.
+- **Write Speed**: Choose `auto` (recommended, ~70% of max), `max` (fastest), `safe` (50% of max), or `custom` (enter your own speed multiplier).
+
+Navidisc will detect your drive's capabilities and the inserted media, and will recommend the safest or fastest speed accordingly. This helps prevent burn errors and ensures compatibility.
 
 ## Troubleshooting
 

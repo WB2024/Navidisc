@@ -474,6 +474,9 @@ class Orchestrator:
                 suggested_action=f"Insert a blank disc into {self.config.burning.device}",
                 recoverable=True,
             )
+            # Cannot proceed with burn if device isn't ready
+            self._set_state(OrchestratorState.ERROR)
+            return
 
         # Burn the disc
         self._set_state(OrchestratorState.BURNING_DISC)
