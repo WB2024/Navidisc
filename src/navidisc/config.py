@@ -11,7 +11,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from navidisc.models import DiscType, DownloadMode
+from navidisc.models import ConversionQuality, DiscType, DownloadMode
 
 
 class NavidromeConfig(BaseModel):
@@ -58,6 +58,10 @@ class MediaConfig(BaseModel):
     download_mode: DownloadMode = Field(
         default=DownloadMode.DOWNLOAD_IF_MISSING,
         description="How to obtain track files"
+    )
+    conversion_quality: ConversionQuality = Field(
+        default=ConversionQuality.DISABLED,
+        description="Convert audio to MP3 with this quality preset"
     )
     use_hardlinks: bool = Field(
         default=True,

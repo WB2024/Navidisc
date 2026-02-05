@@ -26,6 +26,15 @@ class DownloadMode(StrEnum):
     DOWNLOAD_ALWAYS = "download-always"
 
 
+class ConversionQuality(StrEnum):
+    """Audio conversion quality presets."""
+    DISABLED = "disabled"  # No conversion
+    BEST = "best"  # 320kbps CBR, highest quality
+    HIGH = "high"  # 256kbps CBR
+    MEDIUM = "medium"  # 192kbps CBR, good balance
+    SMALL = "small"  # 128kbps CBR, smallest size
+
+
 class OrchestratorState(StrEnum):
     """States for the main workflow state machine."""
     INIT = "init"

@@ -17,7 +17,7 @@ from navidisc.config import (
     save_config,
 )
 from navidisc.core import Orchestrator, OrchestratorEvent
-from navidisc.models import DiscType
+from navidisc.models import ConversionQuality, DiscType
 from navidisc.planner import DiscPlanningEngine
 
 router = APIRouter()
@@ -255,6 +255,7 @@ async def save_configuration(request: Request):
         navidrome_password = form.get("navidrome_password", "")
         device = form.get("device", "/dev/sr0")
         disc_type = form.get("disc_type", "data")
+        conversion_quality = form.get("conversion_quality", "disabled")
         
         # Validate required fields
         if not navidrome_url or not navidrome_username or not navidrome_password:
@@ -292,7 +293,9 @@ async def save_configuration(request: Request):
                 disc_type=DiscType(disc_type),
                 disc_size_mb=disc_size_mb,
             ),
-            media=MediaConfig(),
+            media=MediaConfig(
+                conversion_quality=ConversionQuality(conversion_quality),
+            ),
             logging=LoggingConfig(),
         )
 

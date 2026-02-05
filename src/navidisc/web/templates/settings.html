@@ -193,6 +193,54 @@
             </div>
         </div>
 
+        <!-- Audio Conversion Settings -->
+        <div class="bg-white dark:bg-surface-800 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
+            <div class="px-6 py-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800/50">
+                <div class="flex items-center">
+                    <svg class="h-5 w-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                    </svg>
+                    <h2 class="ml-3 text-lg font-semibold text-surface-900 dark:text-white">
+                        Audio Conversion
+                    </h2>
+                </div>
+            </div>
+            <div class="px-6 py-6 space-y-6">
+                <!-- Conversion Quality -->
+                <div>
+                    <label for="conversion_quality" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                        Convert to MP3
+                    </label>
+                    <select name="conversion_quality" 
+                            id="conversion_quality"
+                            class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
+                                   bg-white dark:bg-surface-700 text-surface-900 dark:text-white
+                                   shadow-sm focus:border-primary-500 focus:ring-primary-500 
+                                   px-3 py-2 border">
+                        <option value="disabled" {% if not config or config.media.conversion_quality.value == 'disabled' %}selected{% endif %}>
+                            Disabled - Keep original formats
+                        </option>
+                        <option value="best" {% if config and config.media.conversion_quality.value == 'best' %}selected{% endif %}>
+                            Best Quality - 320kbps MP3
+                        </option>
+                        <option value="high" {% if config and config.media.conversion_quality.value == 'high' %}selected{% endif %}>
+                            High Quality - 256kbps MP3
+                        </option>
+                        <option value="medium" {% if config and config.media.conversion_quality.value == 'medium' %}selected{% endif %}>
+                            Medium Quality - 192kbps MP3
+                        </option>
+                        <option value="small" {% if config and config.media.conversion_quality.value == 'small' %}selected{% endif %}>
+                            Smallest Size - 128kbps MP3
+                        </option>
+                    </select>
+                    <p class="mt-1 text-xs text-surface-500 dark:text-surface-400">
+                        Convert FLAC, WAV, and other formats to MP3 before burning. Requires ffmpeg.
+                    </p>
+                </div>
+            </div>
+        </div>
+
         <!-- Save Button -->
         <div class="flex items-center justify-between">
             <div id="save-result"></div>

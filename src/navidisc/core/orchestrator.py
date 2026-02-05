@@ -17,11 +17,12 @@ from typing import Any
 from navidisc.api import SubsonicClient
 from navidisc.burner import BurnerAdapter, detect_backend
 from navidisc.config import NavidiscConfig
-from navidisc.media import Downloader, MediaResolver, ResolvedTrack
+from navidisc.media import AudioConverter, Downloader, MediaResolver, ResolvedTrack
 from navidisc.media.resolver import ResolveMethod
 from navidisc.models import (
     BurnPlan,
     BurnStatus,
+    ConversionQuality,
     NavidiscError,
     OrchestratorState,
     Playlist,
@@ -100,6 +101,7 @@ class Orchestrator:
         self._api_client: SubsonicClient | None = None
         self._resolver: MediaResolver | None = None
         self._downloader: Downloader | None = None
+        self._converter: AudioConverter | None = None
         self._planner: DiscPlanningEngine | None = None
         self._staging: StagingManager | None = None
         self._burner: BurnerAdapter | None = None
@@ -185,6 +187,18 @@ class Orchestrator:
             download_dir = self.config.media.staging_dir / "downloads"
             self._downloader = Downloader(download_dir=download_dir)
         return self._downloader
+
+    def _get_converter(self) -> AudioConverter | None:
+        """Get or create the audio converter, if conversion is enabled."""
+        if self.config.media.conversion_quality == ConversionQuality.DISABLED:
+            return None
+        if self._converter is None:
+            convert_dir = self.config.media.staging_dir / "converted"
+            self._converter = AudioConverter(
+                output_dir=convert_dir,
+                quality=self.config.media.conversion_quality,
+            )
+        return self._converter
 
     def _get_planner(self) -> DiscPlanningEngine:
         """Get or create the disc planner."""
@@ -346,6 +360,35 @@ class Orchestrator:
         for rt in self._resolved_tracks:
             if rt.method == ResolveMethod.LOCAL and rt.local_path:
                 self._track_paths[rt.track.id] = rt.local_path
+
+        # Convert tracks to MP3 if conversion is enabled
+        converter = self._get_converter()
+        if converter is not None:
+            # Count files that need conversion
+            needs_convert = {
+                tid: path for tid, path in self._track_paths.items()
+                if converter.needs_conversion(path)
+            }
+            
+            if needs_convert:
+                self._emit(OrchestratorEvent.PROGRESS, {
+                    "step": "converting",
+                    "message": f"Converting {len(needs_convert)} tracks to MP3...",
+                })
+
+                converted = await converter.convert_many(
+                    needs_convert,
+                    progress_callback=lambda p: self._emit(
+                        OrchestratorEvent.PROGRESS,
+                        {
+                            "step": "convert",
+                            "track": p.filename,
+                            "percent": p.percent,
+                            "message": f"Converting: {p.filename}",
+                        }
+                    ),
+                )
+                self._track_paths.update(converted)
 
         self._set_state(OrchestratorState.PLAYLIST_RESOLVED)
 
