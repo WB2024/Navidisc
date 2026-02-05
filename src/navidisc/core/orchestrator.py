@@ -404,13 +404,16 @@ class Orchestrator:
             "message": "Creating disc plan...",
         })
 
-        # Build size lookup from resolved tracks
+        # Build size lookup from actual files on disk (which may have been
+        # converted to MP3), falling back to the API-reported size only when
+        # no local file is available yet.
         size_lookup = {}
         for rt in self._resolved_tracks:
-            if rt.size_bytes:
-                size_lookup[rt.track.id] = rt.size_bytes
-            elif rt.track.id in self._track_paths:
+            if rt.track.id in self._track_paths:
+                # Prefer actual file size – this reflects post-conversion size
                 size_lookup[rt.track.id] = self._track_paths[rt.track.id].stat().st_size
+            elif rt.size_bytes:
+                size_lookup[rt.track.id] = rt.size_bytes
 
         plan = planner.plan(self._playlist, size_lookup)
         self.session.burn_plan = plan
