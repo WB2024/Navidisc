@@ -74,18 +74,19 @@
                             Disc {{ disc.disc_number }}
                         </span>
                     </div>
+                    {% set utilization = disc.total_size_bytes / plan.disc_capacity_bytes if plan.disc_capacity_bytes else 0 %}
                     <div class="flex items-center space-x-4 text-sm text-surface-500 dark:text-surface-400">
                         <span>{{ disc.track_ids|length }} tracks</span>
                         <span>{{ (disc.total_size_bytes / 1024 / 1024)|round(1) }} MB</span>
                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
-                                     {% if disc.utilization > 0.9 %}
+                                     {% if utilization > 0.9 %}
                                      bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
-                                     {% elif disc.utilization > 0.7 %}
+                                     {% elif utilization > 0.7 %}
                                      bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
                                      {% else %}
                                      bg-surface-100 text-surface-600 dark:bg-surface-600 dark:text-surface-300
                                      {% endif %}">
-                            {{ (disc.utilization * 100)|round(1) }}% full
+                            {{ (utilization * 100)|round(1) }}% full
                         </span>
                     </div>
                 </div>
@@ -94,10 +95,10 @@
                 <div class="px-4 py-2 bg-white dark:bg-surface-800">
                     <div class="w-full bg-surface-200 dark:bg-surface-600 rounded-full h-2">
                         <div class="h-2 rounded-full transition-all duration-300
-                                    {% if disc.utilization > 0.9 %}bg-green-500
-                                    {% elif disc.utilization > 0.7 %}bg-yellow-500
+                                    {% if utilization > 0.9 %}bg-green-500
+                                    {% elif utilization > 0.7 %}bg-yellow-500
                                     {% else %}bg-primary-500{% endif %}"
-                             style="width: {{ (disc.utilization * 100)|round(1) }}%"></div>
+                             style="width: {{ (utilization * 100)|round(1) }}%"></div>
                     </div>
                 </div>
 
