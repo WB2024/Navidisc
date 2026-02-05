@@ -128,11 +128,32 @@
                     </template>
                 </div>
             </div>
+            
+            <!-- Cancel Button -->
+            <div class="flex justify-end" x-show="!complete && !error && !cancelled">
+                <button @click="cancelBurn()"
+                        :disabled="cancelling"
+                        class="inline-flex items-center px-4 py-2 border border-surface-300 dark:border-surface-600 rounded-md 
+                               text-sm font-medium text-surface-700 dark:text-surface-300 
+                               bg-white dark:bg-surface-700 hover:bg-surface-50 dark:hover:bg-surface-600
+                               focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500
+                               disabled:opacity-50 disabled:cursor-not-allowed
+                               transition-colors duration-200">
+                    <svg x-show="!cancelling" class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    <svg x-show="cancelling" class="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <span x-text="cancelling ? 'Cancelling...' : 'Cancel'"></span>
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- Complete Panel -->
-    <div x-show="complete && !error"
+    <div x-show="complete && !error && !cancelled"
          x-cloak
          class="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-6">
         <div class="flex">
@@ -156,6 +177,32 @@
             </div>
         </div>
     </div>
+    
+    <!-- Cancelled Panel -->
+    <div x-show="cancelled"
+         x-cloak
+         class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
+        <div class="flex">
+            <svg class="h-6 w-6 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <div class="ml-3">
+                <h3 class="text-lg font-medium text-yellow-800 dark:text-yellow-200">
+                    Burn Cancelled
+                </h3>
+                <p class="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+                    The burn workflow was cancelled. No changes were made to any disc.
+                </p>
+                <a href="/playlists" 
+                   class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md 
+                          text-yellow-800 bg-yellow-200 hover:bg-yellow-300 
+                          dark:text-yellow-900 dark:bg-yellow-400 dark:hover:bg-yellow-500
+                          transition-colors duration-200">
+                    Back to Playlists
+                </a>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -167,6 +214,8 @@ function burnWorkflow() {
         burning: false,
         complete: false,
         error: false,
+        cancelled: false,
+        cancelling: false,
         progress: 0,
         currentStatus: 'Initializing...',
         events: [],
@@ -218,6 +267,26 @@ function burnWorkflow() {
                 this.error = true;
             }
         },
+        
+        async cancelBurn() {
+            if (!this.sessionId || this.cancelling) return;
+            
+            this.cancelling = true;
+            this.addEvent('warning', 'Cancelling...');
+            
+            try {
+                const response = await fetch(`/api/burn/cancel/${this.sessionId}`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to cancel');
+                }
+            } catch (error) {
+                this.addEvent('error', `Cancel failed: ${error.message}`);
+                this.cancelling = false;
+            }
+        },
 
         connectEventStream() {
             this.eventSource = new EventSource(`/api/burn/stream/${this.sessionId}`);
@@ -228,7 +297,9 @@ function burnWorkflow() {
             };
 
             this.eventSource.onerror = (error) => {
-                this.addEvent('error', 'Connection lost');
+                if (!this.cancelled) {
+                    this.addEvent('error', 'Connection lost');
+                }
                 this.eventSource.close();
             };
         },
@@ -296,6 +367,16 @@ function burnWorkflow() {
                     this.currentStatus = 'Complete';
                     break;
                     
+                case 'cancelled':
+                    this.addEvent('warning', eventData.message || 'Burn cancelled');
+                    this.cancelled = true;
+                    this.cancelling = false;
+                    this.currentStatus = 'Cancelled';
+                    if (this.eventSource) {
+                        this.eventSource.close();
+                    }
+                    break;
+                    
                 case 'error':
                     this.addEvent('error', eventData.message || 'An error occurred');
                     this.error = true;
@@ -304,7 +385,7 @@ function burnWorkflow() {
                 case 'done':
                     this.complete = true;
                     this.progress = 100;
-                    this.currentStatus = 'Complete';
+                    this.currentStatus = this.cancelled ? 'Cancelled' : 'Complete';
                     if (this.eventSource) {
                         this.eventSource.close();
                     }

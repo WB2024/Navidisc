@@ -386,9 +386,26 @@ async def start_burn(request: Request, burn_request: BurnRequest):
         "dry_run": burn_request.dry_run,
         "status": "starting",
         "events": asyncio.Queue(),
+        "cancelled": False,
     }
 
     return {"session_id": session_id}
+
+
+@router.post("/api/burn/cancel/{session_id}")
+async def cancel_burn(request: Request, session_id: str):
+    """Cancel a running burn workflow."""
+    if session_id not in request.app.state.active_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    session = request.app.state.active_sessions[session_id]
+    session["cancelled"] = True
+    session["events"].put_nowait({
+        "event": "cancelled",
+        "data": {"message": "Burn cancelled by user"},
+    })
+
+    return {"status": "cancelled"}
 
 
 @router.get("/api/burn/stream/{session_id}")
