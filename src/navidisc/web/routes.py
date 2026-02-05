@@ -294,19 +294,30 @@ async def save_configuration(request: Request, config_data: ConfigUpdate):
 async def test_connection(request: Request):
     """Test Navidrome connection."""
     templates = get_templates(request)
-    config = get_config(request)
 
-    if not config:
+    # Get form data
+    try:
+        form = await request.form()
+        navidrome_url = form.get("navidrome_url")
+        navidrome_username = form.get("navidrome_username")
+        navidrome_password = form.get("navidrome_password")
+
+        if not all([navidrome_url, navidrome_username, navidrome_password]):
+            return templates.TemplateResponse(
+                "partials/error.html",
+                {"request": request, "message": "Missing required fields"},
+            )
+    except Exception as e:
         return templates.TemplateResponse(
             "partials/error.html",
-            {"request": request, "message": "Not configured"},
+            {"request": request, "message": f"Form error: {e}"},
         )
 
     try:
         async with SubsonicClient(
-            base_url=config.navidrome.url,
-            username=config.navidrome.username,
-            password=config.navidrome.password,
+            base_url=navidrome_url,
+            username=navidrome_username,
+            password=navidrome_password,
         ) as client:
             await client.authenticate()
             playlists = await client.get_playlists()
