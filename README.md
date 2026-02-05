@@ -140,24 +140,47 @@ Then open `http://localhost:8080` in your browser.
 - 🌗 **Dark Mode** - Automatic dark mode support
 - 📱 **Responsive** - Works on desktop and mobile browsers
 
-### Screenshot
+### Screenshots
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  🔘 Navidisc           Home  Playlists  Settings    ●  │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│    🔘 Welcome to Navidisc                               │
-│                                                         │
-│    Burn your Navidrome playlists to physical media.     │
-│                                                         │
-│    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐  │
-│    │ 🎵 Browse    │ │ ⚙️ Settings  │ │ ✓ Ready to   │  │
-│    │   Playlists  │ │              │ │   Burn       │  │
-│    └──────────────┘ └──────────────┘ └──────────────┘  │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-```
+#### Home Page
+The main dashboard showing quick access to playlists, settings, and current configuration status.
+
+![Home Page](docs/screenshots/Home.jpg)
+
+#### Features Overview
+Highlights the key features of Navidisc including Data DVDs, Audio CDs, and Smart Planning capabilities.
+
+![Features](docs/screenshots/Features.jpg)
+
+#### Playlists Browser
+Browse all your Navidrome playlists with track counts and duration. Click on any playlist to view details or start burning.
+
+![Playlists](docs/screenshots/Playlists1%20.jpg)
+
+#### Settings - Connection
+Configure your Navidrome server connection with URL, username, and password. Test the connection before saving.
+
+![Settings Connection](docs/screenshots/Settings%201.jpg)
+
+#### Settings - Burning Options
+Configure disc type, device path, and disc size for your burning preferences.
+
+![Settings Burning](docs/screenshots/Settings%202.jpg)
+
+#### Burn Workflow - Plan
+Review the burn plan showing how tracks will be distributed across discs with utilization percentages.
+
+![Burn Plan](docs/screenshots/Burn%201.jpg)
+
+#### Burn Workflow - Progress
+Real-time progress display during the burn process with activity log and status updates.
+
+![Burn Progress](docs/screenshots/Burn%202.jpg)
+
+#### Burn Workflow - Complete
+Confirmation screen showing successful completion of the burn operation.
+
+![Burn Complete](docs/screenshots/Burn%203.jpg)
 
 ## CLI Reference
 
