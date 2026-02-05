@@ -94,13 +94,13 @@ class NavidiscConfig(BaseModel):
 
 def load_config(path: Path) -> NavidiscConfig:
     """Load configuration from a YAML file.
-    
+
     Args:
         path: Path to the configuration file.
-        
+
     Returns:
         Validated NavidiscConfig instance.
-        
+
     Raises:
         FileNotFoundError: If config file doesn't exist.
         ValidationError: If config is invalid.
@@ -112,7 +112,7 @@ def load_config(path: Path) -> NavidiscConfig:
 
 def save_config(config: NavidiscConfig, path: Path) -> None:
     """Save configuration to a YAML file.
-    
+
     Args:
         config: Configuration to save.
         path: Path to write the configuration file.
@@ -128,7 +128,7 @@ def save_config(config: NavidiscConfig, path: Path) -> None:
 
 def get_default_config_path() -> Path:
     """Get the default configuration file path.
-    
+
     Returns:
         Path to ~/.config/navidisc/config.yaml
     """
@@ -137,7 +137,7 @@ def get_default_config_path() -> Path:
 
 def create_example_config() -> str:
     """Generate an example configuration file.
-    
+
     Returns:
         YAML string with example configuration.
     """

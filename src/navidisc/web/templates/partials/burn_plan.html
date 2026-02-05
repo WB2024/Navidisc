@@ -1,0 +1,143 @@
+<!-- Burn plan partial - loaded via HTMX -->
+<div class="bg-white dark:bg-surface-800 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-surface-200 dark:border-surface-700">
+        <h2 class="text-xl font-bold text-surface-900 dark:text-white">
+            {{ playlist.name }}
+        </h2>
+        <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
+            {{ playlist.tracks|length }} tracks
+            {% if playlist.duration_seconds %}
+            · {{ (playlist.duration_seconds / 60)|int }} minutes
+            {% endif %}
+        </p>
+    </div>
+
+    <!-- Plan Summary -->
+    {% if plan_summary %}
+    <div class="px-6 py-4 bg-surface-50 dark:bg-surface-800/50">
+        <h3 class="text-sm font-medium text-surface-700 dark:text-surface-300 mb-4">Disc Plan Summary</h3>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div class="text-center p-4 bg-white dark:bg-surface-700 rounded-lg border border-surface-200 dark:border-surface-600">
+                <div class="text-3xl font-bold text-primary-600 dark:text-primary-400">
+                    {{ plan.discs|length }}
+                </div>
+                <div class="text-sm text-surface-500 dark:text-surface-400 mt-1">
+                    Disc{% if plan.discs|length != 1 %}s{% endif %} Required
+                </div>
+            </div>
+            <div class="text-center p-4 bg-white dark:bg-surface-700 rounded-lg border border-surface-200 dark:border-surface-600">
+                <div class="text-3xl font-bold text-surface-900 dark:text-white">
+                    {{ plan_summary.total_tracks }}
+                </div>
+                <div class="text-sm text-surface-500 dark:text-surface-400 mt-1">
+                    Total Tracks
+                </div>
+            </div>
+            <div class="text-center p-4 bg-white dark:bg-surface-700 rounded-lg border border-surface-200 dark:border-surface-600">
+                <div class="text-3xl font-bold text-surface-900 dark:text-white">
+                    {{ (plan_summary.total_bytes / 1024 / 1024)|round(1) }}
+                </div>
+                <div class="text-sm text-surface-500 dark:text-surface-400 mt-1">
+                    MB Total
+                </div>
+            </div>
+            <div class="text-center p-4 bg-white dark:bg-surface-700 rounded-lg border border-surface-200 dark:border-surface-600">
+                <div class="text-3xl font-bold text-green-600 dark:text-green-400">
+                    {{ (plan_summary.average_utilization * 100)|round(1) }}%
+                </div>
+                <div class="text-sm text-surface-500 dark:text-surface-400 mt-1">
+                    Avg Utilization
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Disc Breakdown -->
+    {% if plan and plan.discs %}
+    <div class="px-6 py-4">
+        <h3 class="text-sm font-medium text-surface-700 dark:text-surface-300 mb-4">Disc Contents</h3>
+        
+        <div class="space-y-4">
+            {% for disc in plan.discs %}
+            <div class="border border-surface-200 dark:border-surface-600 rounded-lg overflow-hidden">
+                <!-- Disc Header -->
+                <div class="px-4 py-3 bg-surface-50 dark:bg-surface-700 flex items-center justify-between">
+                    <div class="flex items-center">
+                        <svg class="h-5 w-5 text-surface-400 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                            <circle cx="12" cy="12" r="3" stroke-width="2"/>
+                        </svg>
+                        <span class="font-medium text-surface-900 dark:text-white">
+                            Disc {{ disc.disc_number }}
+                        </span>
+                    </div>
+                    <div class="flex items-center space-x-4 text-sm text-surface-500 dark:text-surface-400">
+                        <span>{{ disc.track_ids|length }} tracks</span>
+                        <span>{{ (disc.total_bytes / 1024 / 1024)|round(1) }} MB</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                                     {% if disc.utilization > 0.9 %}
+                                     bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                     {% elif disc.utilization > 0.7 %}
+                                     bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                                     {% else %}
+                                     bg-surface-100 text-surface-600 dark:bg-surface-600 dark:text-surface-300
+                                     {% endif %}">
+                            {{ (disc.utilization * 100)|round(1) }}% full
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Utilization Bar -->
+                <div class="px-4 py-2 bg-white dark:bg-surface-800">
+                    <div class="w-full bg-surface-200 dark:bg-surface-600 rounded-full h-2">
+                        <div class="h-2 rounded-full transition-all duration-300
+                                    {% if disc.utilization > 0.9 %}bg-green-500
+                                    {% elif disc.utilization > 0.7 %}bg-yellow-500
+                                    {% else %}bg-primary-500{% endif %}"
+                             style="width: {{ (disc.utilization * 100)|round(1) }}%"></div>
+                    </div>
+                </div>
+
+                <!-- Track List (collapsed by default) -->
+                <details class="group">
+                    <summary class="px-4 py-2 cursor-pointer text-sm text-primary-600 dark:text-primary-400 hover:bg-surface-50 dark:hover:bg-surface-700 flex items-center">
+                        <svg class="h-4 w-4 mr-2 transform group-open:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                        Show tracks
+                    </summary>
+                    <div class="px-4 py-2 border-t border-surface-100 dark:border-surface-700 bg-surface-50 dark:bg-surface-800/50">
+                        <ul class="space-y-1 text-sm">
+                            {% for track_id in disc.track_ids %}
+                            {% set track = playlist.tracks | selectattr('id', 'equalto', track_id) | first %}
+                            {% if track %}
+                            <li class="flex items-center py-1 text-surface-600 dark:text-surface-300">
+                                <span class="w-6 text-surface-400">{{ loop.index }}.</span>
+                                <span class="truncate">{{ track.title }} - {{ track.artist }}</span>
+                            </li>
+                            {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </details>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Warnings -->
+    {% if plan and plan.warnings %}
+    <div class="px-6 py-4 bg-yellow-50 dark:bg-yellow-900/30 border-t border-yellow-100 dark:border-yellow-800">
+        <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">Warnings</h3>
+        <ul class="list-disc list-inside text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
+            {% for warning in plan.warnings %}
+            <li>{{ warning }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>

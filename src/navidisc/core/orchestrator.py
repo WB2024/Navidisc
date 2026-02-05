@@ -10,7 +10,7 @@ This module provides:
 import uuid
 from collections.abc import Callable
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +31,7 @@ from navidisc.planner import DiscPlanningEngine
 from navidisc.staging import StagingManager
 
 
-class OrchestratorEvent(str, Enum):
+class OrchestratorEvent(StrEnum):
     """Events emitted by the orchestrator for UI updates."""
     STATE_CHANGED = "state_changed"
     PROGRESS = "progress"
@@ -53,22 +53,22 @@ class OrchestratorError(Exception):
 
 class Orchestrator:
     """State machine orchestrating the complete burn workflow.
-    
+
     This is the central coordinator that:
     - Manages workflow state transitions
     - Coordinates all modules (API, planner, staging, burner)
     - Handles errors and retries
     - Emits events for UI updates
-    
+
     The orchestrator is designed to be:
     - Explicit: clear state transitions
     - Debuggable: full state inspection
     - Resumable: state can be serialized
     - AI-friendly: deterministic behavior
-    
+
     Example:
         orchestrator = Orchestrator(config)
-        
+
         async with orchestrator:
             await orchestrator.run_playlist_burn(
                 playlist_name="Road Trip",
@@ -82,7 +82,7 @@ class Orchestrator:
         dry_run: bool = False,
     ):
         """Initialize the orchestrator.
-        
+
         Args:
             config: Navidisc configuration.
             dry_run: If True, don't actually burn discs.
@@ -227,12 +227,12 @@ class Orchestrator:
         event_handler: EventCallback | None = None,
     ) -> SessionState:
         """Run the complete playlist burn workflow.
-        
+
         Args:
             playlist_name: Name of playlist to burn (mutually exclusive with id).
             playlist_id: ID of playlist to burn (mutually exclusive with name).
             event_handler: Callback for workflow events.
-            
+
         Returns:
             Final session state.
         """
@@ -479,14 +479,14 @@ class Orchestrator:
         event_handler: EventCallback | None = None,
     ) -> BurnPlan:
         """Create a burn plan without actually burning.
-        
+
         Useful for dry-run planning and previewing disc splits.
-        
+
         Args:
             playlist_name: Name of playlist.
             playlist_id: ID of playlist.
             event_handler: Optional event callback.
-            
+
         Returns:
             The burn plan.
         """

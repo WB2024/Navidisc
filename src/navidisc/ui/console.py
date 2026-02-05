@@ -35,14 +35,14 @@ NAVIDISC_THEME = Theme({
 
 class Console:
     """Rich console interface for Navidisc.
-    
+
     Provides formatted output for the burn workflow.
     Contains no business logic - pure presentation.
     """
 
     def __init__(self, quiet: bool = False):
         """Initialize the console.
-        
+
         Args:
             quiet: If True, minimize output.
         """
@@ -173,11 +173,11 @@ class Console:
 
     def confirm(self, message: str, default: bool = False) -> bool:
         """Ask for user confirmation.
-        
+
         Args:
             message: Confirmation message.
             default: Default value if user just presses Enter.
-            
+
         Returns:
             True if confirmed, False otherwise.
         """
@@ -195,13 +195,13 @@ class Console:
 
 class ProgressDisplay:
     """Progress display using Rich progress bars.
-    
+
     Provides visual feedback during long-running operations.
     """
 
     def __init__(self, console: Console):
         """Initialize progress display.
-        
+
         Args:
             console: Console instance to use.
         """
@@ -224,7 +224,7 @@ class ProgressDisplay:
 
     def update(self, description: str | None = None, completed: float | None = None) -> None:
         """Update progress.
-        
+
         Args:
             description: New description text.
             completed: Completion percentage (0-100).
@@ -247,11 +247,11 @@ class ProgressDisplay:
 
 def create_event_handler(console: Console, progress: ProgressDisplay) -> callable:
     """Create an event handler for the orchestrator.
-    
+
     Args:
         console: Console instance.
         progress: Progress display instance.
-        
+
     Returns:
         Event handler callback function.
     """
@@ -261,7 +261,7 @@ def create_event_handler(console: Console, progress: ProgressDisplay) -> callabl
             pass
 
         elif event == OrchestratorEvent.PROGRESS:
-            step = data.get("step", "")
+            data.get("step", "")
             message = data.get("message", "")
             percent = data.get("percent")
 

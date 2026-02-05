@@ -6,13 +6,13 @@ This module determines the best way to obtain each track:
 """
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from navidisc.models import DownloadMode, Track
 
 
-class ResolveMethod(str, Enum):
+class ResolveMethod(StrEnum):
     """How a track file was/will be obtained."""
     LOCAL = "local"
     DOWNLOAD = "download"
@@ -22,7 +22,7 @@ class ResolveMethod(str, Enum):
 @dataclass
 class ResolvedTrack:
     """A track with its resolved file location.
-    
+
     This is a pure data class representing the resolution result
     for a single track, designed to be deterministic and serializable.
     """
@@ -42,15 +42,15 @@ class ResolvedTrack:
 
 class MediaResolver:
     """Resolves tracks to their file locations.
-    
+
     This class is responsible for determining how to obtain each track
     based on the configured download mode and available sources.
-    
+
     The resolver is designed to be:
     - Deterministic: same inputs produce same outputs
     - Pure: no side effects during resolution
     - Serializable: results can be saved and restored
-    
+
     Example:
         resolver = MediaResolver(
             library_paths=[Path("/music")],
@@ -65,7 +65,7 @@ class MediaResolver:
         download_mode: DownloadMode = DownloadMode.DOWNLOAD_IF_MISSING,
     ):
         """Initialize the media resolver.
-        
+
         Args:
             library_paths: Paths to local music library directories.
                           If provided, local files will be preferred.
@@ -76,14 +76,14 @@ class MediaResolver:
 
     def resolve(self, track: Track, download_url: str) -> ResolvedTrack:
         """Resolve a track to its file location.
-        
+
         This is a pure function - it only examines the filesystem
         and returns a result without modifying anything.
-        
+
         Args:
             track: Track to resolve.
             download_url: URL for downloading the track if needed.
-            
+
         Returns:
             ResolvedTrack with resolution details.
         """
@@ -130,11 +130,11 @@ class MediaResolver:
         download_url_builder: callable,
     ) -> list[ResolvedTrack]:
         """Resolve multiple tracks.
-        
+
         Args:
             tracks: List of tracks to resolve.
             download_url_builder: Function that takes a track ID and returns download URL.
-            
+
         Returns:
             List of ResolvedTrack objects in the same order.
         """
@@ -145,14 +145,14 @@ class MediaResolver:
 
     def _find_local_file(self, track: Track) -> Path | None:
         """Find a track's local file.
-        
+
         Searches library paths for the track file using:
         1. The exact path from track metadata (if within library)
         2. Path-based matching within library directories
-        
+
         Args:
             track: Track to find.
-            
+
         Returns:
             Path to local file if found, None otherwise.
         """
@@ -186,10 +186,10 @@ class MediaResolver:
         resolved_tracks: list[ResolvedTrack],
     ) -> dict:
         """Get a summary of resolution results.
-        
+
         Args:
             resolved_tracks: List of resolved tracks.
-            
+
         Returns:
             Dictionary with summary statistics.
         """

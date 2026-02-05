@@ -1,0 +1,112 @@
+<!-- Playlist details partial - loaded via HTMX -->
+<div class="bg-white dark:bg-surface-800 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden fade-in mt-6"
+     id="playlist-details">
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800/50">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-xl font-bold text-surface-900 dark:text-white">
+                    {{ playlist.name }}
+                </h2>
+                <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
+                    {{ playlist.tracks|length }} tracks
+                    {% if playlist.duration_seconds %}
+                    · {{ (playlist.duration_seconds / 60)|int }} minutes total
+                    {% endif %}
+                </p>
+            </div>
+            <button onclick="document.getElementById('playlist-details').innerHTML = ''; document.getElementById('playlist-details').classList.add('hidden');"
+                    class="p-2 rounded-md hover:bg-surface-100 dark:hover:bg-surface-700 transition-colors">
+                <svg class="h-5 w-5 text-surface-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Plan Summary -->
+    {% if plan_summary %}
+    <div class="px-6 py-4 bg-primary-50 dark:bg-primary-900/30 border-b border-primary-100 dark:border-primary-800">
+        <h3 class="text-sm font-medium text-primary-800 dark:text-primary-200 mb-3">Disc Plan</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+                <span class="text-primary-600 dark:text-primary-400">Discs Required:</span>
+                <span class="ml-2 font-semibold text-primary-900 dark:text-primary-100">{{ plan.discs|length }}</span>
+            </div>
+            <div>
+                <span class="text-primary-600 dark:text-primary-400">Total Tracks:</span>
+                <span class="ml-2 font-semibold text-primary-900 dark:text-primary-100">{{ plan_summary.total_tracks }}</span>
+            </div>
+            <div>
+                <span class="text-primary-600 dark:text-primary-400">Total Size:</span>
+                <span class="ml-2 font-semibold text-primary-900 dark:text-primary-100">
+                    {{ (plan_summary.total_bytes / 1024 / 1024)|round(1) }} MB
+                </span>
+            </div>
+            <div>
+                <span class="text-primary-600 dark:text-primary-400">Avg Utilization:</span>
+                <span class="ml-2 font-semibold text-primary-900 dark:text-primary-100">
+                    {{ (plan_summary.average_utilization * 100)|round(1) }}%
+                </span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Track List -->
+    <div class="px-6 py-4">
+        <h3 class="text-sm font-medium text-surface-700 dark:text-surface-300 mb-3">Tracks</h3>
+        <div class="space-y-2 max-h-96 overflow-y-auto">
+            {% for track in playlist.tracks %}
+            <div class="flex items-center py-2 px-3 rounded-lg hover:bg-surface-50 dark:hover:bg-surface-700/50 transition-colors">
+                <span class="w-8 text-sm text-surface-400 dark:text-surface-500">{{ loop.index }}</span>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-surface-900 dark:text-white truncate">
+                        {{ track.title }}
+                    </p>
+                    <p class="text-xs text-surface-500 dark:text-surface-400 truncate">
+                        {{ track.artist }}
+                        {% if track.album %} · {{ track.album }}{% endif %}
+                    </p>
+                </div>
+                <span class="ml-4 text-xs text-surface-400 dark:text-surface-500">
+                    {% if track.duration_seconds %}
+                    {{ (track.duration_seconds / 60)|int }}:{{ '%02d'|format((track.duration_seconds % 60)|int) }}
+                    {% endif %}
+                </span>
+                {% if track.size_bytes %}
+                <span class="ml-4 text-xs text-surface-400 dark:text-surface-500">
+                    {{ (track.size_bytes / 1024 / 1024)|round(1) }} MB
+                </span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="px-6 py-4 bg-surface-50 dark:bg-surface-800/50 border-t border-surface-200 dark:border-surface-700">
+        <div class="flex items-center justify-end space-x-3">
+            <button onclick="document.getElementById('playlist-details').innerHTML = ''; document.getElementById('playlist-details').classList.add('hidden');"
+                    class="px-4 py-2 text-sm font-medium text-surface-700 dark:text-surface-300 
+                           bg-white dark:bg-surface-700 border border-surface-300 dark:border-surface-600 
+                           rounded-md hover:bg-surface-50 dark:hover:bg-surface-600 transition-colors">
+                Close
+            </button>
+            <a href="/burn/{{ playlist.id }}"
+               class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md
+                      text-white bg-primary-600 hover:bg-primary-700 transition-colors">
+                <svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <circle cx="12" cy="12" r="8" stroke-width="2"/>
+                    <circle cx="12" cy="12" r="2" stroke-width="2"/>
+                </svg>
+                Burn This Playlist
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+// Make the details panel visible
+document.getElementById('playlist-details').classList.remove('hidden');
+</script>

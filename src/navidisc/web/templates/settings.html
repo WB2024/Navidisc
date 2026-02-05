@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Navidisc - Settings{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-surface-900 dark:text-white">Settings</h1>
+        <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
+            Configure your Navidrome connection and burning preferences
+        </p>
+    </div>
+
+    <!-- Settings Form -->
+    <form hx-post="/api/config"
+          hx-target="#save-result"
+          hx-swap="innerHTML"
+          class="space-y-8">
+        
+        <!-- Navidrome Connection -->
+        <div class="bg-white dark:bg-surface-800 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
+            <div class="px-6 py-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800/50">
+                <div class="flex items-center">
+                    <svg class="h-5 w-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+                    </svg>
+                    <h2 class="ml-3 text-lg font-semibold text-surface-900 dark:text-white">
+                        Navidrome Connection
+                    </h2>
+                </div>
+            </div>
+            <div class="px-6 py-6 space-y-6">
+                <!-- URL -->
+                <div>
+                    <label for="navidrome_url" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                        Server URL
+                    </label>
+                    <input type="url" 
+                           name="navidrome_url" 
+                           id="navidrome_url"
+                           value="{{ config.navidrome.url if config else '' }}"
+                           placeholder="https://your-navidrome-server.com"
+                           required
+                           class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
+                                  bg-white dark:bg-surface-700 text-surface-900 dark:text-white
+                                  shadow-sm focus:border-primary-500 focus:ring-primary-500 
+                                  placeholder-surface-400 dark:placeholder-surface-500
+                                  px-3 py-2 border">
+                    <p class="mt-1 text-xs text-surface-500 dark:text-surface-400">
+                        The full URL to your Navidrome server (including https://)
+                    </p>
+                </div>
+
+                <!-- Username -->
+                <div>
+                    <label for="navidrome_username" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                        Username
+                    </label>
+                    <input type="text" 
+                           name="navidrome_username" 
+                           id="navidrome_username"
+                           value="{{ config.navidrome.username if config else '' }}"
+                           placeholder="your-username"
+                           required
+                           class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
+                                  bg-white dark:bg-surface-700 text-surface-900 dark:text-white
+                                  shadow-sm focus:border-primary-500 focus:ring-primary-500 
+                                  placeholder-surface-400 dark:placeholder-surface-500
+                                  px-3 py-2 border">
+                </div>
+
+                <!-- Password -->
+                <div>
+                    <label for="navidrome_password" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                        Password
+                    </label>
+                    <input type="password" 
+                           name="navidrome_password" 
+                           id="navidrome_password"
+                           value="{{ config.navidrome.password if config else '' }}"
+                           placeholder="••••••••"
+                           required
+                           class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
+                                  bg-white dark:bg-surface-700 text-surface-900 dark:text-white
+                                  shadow-sm focus:border-primary-500 focus:ring-primary-500 
+                                  placeholder-surface-400 dark:placeholder-surface-500
+                                  px-3 py-2 border">
+                </div>
+
+                <!-- Test Connection -->
+                <div>
+                    <button type="button"
+                            hx-post="/api/test-connection"
+                            hx-target="#connection-result"
+                            hx-swap="innerHTML"
+                            class="inline-flex items-center px-4 py-2 border border-surface-300 dark:border-surface-600 
+                                   rounded-md text-sm font-medium text-surface-700 dark:text-surface-200 
+                                   bg-white dark:bg-surface-700 hover:bg-surface-50 dark:hover:bg-surface-600
+                                   transition-colors duration-200">
+                        <svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        Test Connection
+                    </button>
+                    <div id="connection-result" class="mt-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Burning Settings -->
+        <div class="bg-white dark:bg-surface-800 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
+            <div class="px-6 py-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800/50">
+                <div class="flex items-center">
+                    <svg class="h-5 w-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                        <circle cx="12" cy="12" r="3" stroke-width="2"/>
+                    </svg>
+                    <h2 class="ml-3 text-lg font-semibold text-surface-900 dark:text-white">
+                        Burning Settings
+                    </h2>
+                </div>
+            </div>
+            <div class="px-6 py-6 space-y-6">
+                <!-- Device -->
+                <div>
+                    <label for="device" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                        Burner Device
+                    </label>
+                    <input type="text" 
+                           name="device" 
+                           id="device"
+                           value="{{ config.burning.device if config else '/dev/sr0' }}"
+                           placeholder="/dev/sr0"
+                           class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
+                                  bg-white dark:bg-surface-700 text-surface-900 dark:text-white
+                                  shadow-sm focus:border-primary-500 focus:ring-primary-500 
+                                  placeholder-surface-400 dark:placeholder-surface-500
+                                  px-3 py-2 border font-mono">
+                    <p class="mt-1 text-xs text-surface-500 dark:text-surface-400">
+                        The path to your optical drive (e.g., /dev/sr0, /dev/cdrom)
+                    </p>
+                </div>
+
+                <!-- Disc Type -->
+                <div>
+                    <label for="disc_type" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                        Disc Type
+                    </label>
+                    <select name="disc_type" 
+                            id="disc_type"
+                            class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
+                                   bg-white dark:bg-surface-700 text-surface-900 dark:text-white
+                                   shadow-sm focus:border-primary-500 focus:ring-primary-500 
+                                   px-3 py-2 border">
+                        <option value="data" {% if config and config.burning.disc_type.value == 'data' %}selected{% endif %}>
+                            Data DVD/CD - Keep original file formats
+                        </option>
+                        <option value="audio" {% if config and config.burning.disc_type.value == 'audio' %}selected{% endif %}>
+                            Audio CD - Convert to Red Book audio (74-80 min max)
+                        </option>
+                    </select>
+                </div>
+
+                <!-- Disc Size -->
+                <div>
+                    <label for="disc_size_mb" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                        Disc Size (MB)
+                    </label>
+                    <select name="disc_size_mb" 
+                            id="disc_size_mb"
+                            class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
+                                   bg-white dark:bg-surface-700 text-surface-900 dark:text-white
+                                   shadow-sm focus:border-primary-500 focus:ring-primary-500 
+                                   px-3 py-2 border">
+                        <option value="700" {% if config and config.burning.disc_size_mb == 700 %}selected{% endif %}>
+                            CD - 700 MB
+                        </option>
+                        <option value="4700" {% if config and config.burning.disc_size_mb == 4700 %}selected{% endif %}>
+                            DVD - 4.7 GB
+                        </option>
+                        <option value="8500" {% if config and config.burning.disc_size_mb == 8500 %}selected{% endif %}>
+                            DVD DL - 8.5 GB
+                        </option>
+                        <option value="25000" {% if config and config.burning.disc_size_mb == 25000 %}selected{% endif %}>
+                            Blu-ray - 25 GB
+                        </option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="flex items-center justify-between">
+            <div id="save-result"></div>
+            <button type="submit"
+                    class="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm 
+                           text-base font-medium text-white bg-primary-600 hover:bg-primary-700 
+                           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500
+                           transition-colors duration-200">
+                <svg class="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M5 13l4 4L19 7"/>
+                </svg>
+                Save Settings
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -25,10 +25,10 @@ from navidisc.models import Playlist, Track
 
 class SubsonicClient:
     """Client for interacting with Subsonic-compatible APIs (including Navidrome).
-    
+
     This client uses token-based authentication (salt + token) which is the
     recommended method for Subsonic API 1.13.0+.
-    
+
     Example:
         client = SubsonicClient(
             base_url="http://localhost:4533",
@@ -48,7 +48,7 @@ class SubsonicClient:
         client_name: str = "navidisc",
     ):
         """Initialize the Subsonic client.
-        
+
         Args:
             base_url: Base URL of the Subsonic server (e.g., http://localhost:4533)
             username: Username for authentication
@@ -71,7 +71,7 @@ class SubsonicClient:
 
     def _generate_auth_params(self) -> dict[str, str]:
         """Generate authentication parameters using token method.
-        
+
         Returns:
             Dictionary with authentication parameters.
         """
@@ -99,14 +99,14 @@ class SubsonicClient:
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Make an authenticated request to the Subsonic API.
-        
+
         Args:
             endpoint: API endpoint (e.g., "getPlaylists")
             params: Additional query parameters
-            
+
         Returns:
             Response data from the API.
-            
+
         Raises:
             ConnectionError: If unable to connect to server
             AuthenticationError: If authentication fails
@@ -148,10 +148,10 @@ class SubsonicClient:
 
     async def authenticate(self) -> bool:
         """Test authentication with the server.
-        
+
         Returns:
             True if authentication successful.
-            
+
         Raises:
             AuthenticationError: If authentication fails.
             ConnectionError: If unable to connect.
@@ -163,7 +163,7 @@ class SubsonicClient:
 
     async def get_playlists(self) -> list[Playlist]:
         """Get all playlists accessible to the user.
-        
+
         Returns:
             List of Playlist objects (without full track details).
         """
@@ -189,13 +189,13 @@ class SubsonicClient:
 
     async def get_playlist(self, playlist_id: str) -> Playlist:
         """Get a playlist with full track details.
-        
+
         Args:
             playlist_id: ID of the playlist to retrieve.
-            
+
         Returns:
             Playlist with tracks populated.
-            
+
         Raises:
             PlaylistNotFoundError: If playlist doesn't exist.
         """
@@ -227,13 +227,13 @@ class SubsonicClient:
 
     async def get_playlist_by_name(self, name: str) -> Playlist:
         """Get a playlist by name with full track details.
-        
+
         Args:
             name: Name of the playlist (case-insensitive).
-            
+
         Returns:
             Playlist with tracks populated.
-            
+
         Raises:
             PlaylistNotFoundError: If no playlist with that name exists.
         """
@@ -248,10 +248,10 @@ class SubsonicClient:
 
     def _parse_track(self, data: dict[str, Any]) -> Track:
         """Parse track data from API response.
-        
+
         Args:
             data: Track data from Subsonic API.
-            
+
         Returns:
             Track model instance.
         """
@@ -271,10 +271,10 @@ class SubsonicClient:
 
     def _build_stream_url(self, track_id: str) -> str:
         """Build a stream/download URL for a track.
-        
+
         Args:
             track_id: ID of the track.
-            
+
         Returns:
             Full URL that can be used to download the track.
         """
@@ -286,12 +286,12 @@ class SubsonicClient:
 
     def get_download_url(self, track_id: str) -> str:
         """Get a download URL for a track.
-        
+
         Public method for getting track download URLs.
-        
+
         Args:
             track_id: ID of the track.
-            
+
         Returns:
             Full URL for downloading the track.
         """

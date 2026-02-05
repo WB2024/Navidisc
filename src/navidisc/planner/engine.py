@@ -8,12 +8,12 @@ This module provides:
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from navidisc.models import BurnPlan, DiscPlan, DiscType, Playlist, Track
 
 
-class PlanningStrategy(str, Enum):
+class PlanningStrategy(StrEnum):
     """Strategy for splitting playlists across discs."""
     GREEDY_SEQUENTIAL = "greedy_sequential"  # Fill each disc in order
     # Future strategies:
@@ -28,12 +28,12 @@ class PlanningError(Exception):
 
 class DiscPlanningEngine:
     """Engine for planning how to split playlists across discs.
-    
+
     This engine is:
     - Deterministic: same inputs always produce same outputs
     - Pure: no side effects
     - Serializable: plans can be saved/loaded as JSON
-    
+
     Example:
         engine = DiscPlanningEngine(
             disc_type=DiscType.DATA,
@@ -54,7 +54,7 @@ class DiscPlanningEngine:
         strategy: PlanningStrategy = PlanningStrategy.GREEDY_SEQUENTIAL,
     ):
         """Initialize the planning engine.
-        
+
         Args:
             disc_type: Type of disc to plan for.
             disc_capacity_bytes: Capacity for data discs (bytes).
@@ -78,15 +78,15 @@ class DiscPlanningEngine:
         track_sizes: dict[str, int] | None = None,
     ) -> BurnPlan:
         """Create a burn plan for a playlist.
-        
+
         Args:
             playlist: Playlist to plan.
             track_sizes: Dictionary mapping track IDs to file sizes in bytes.
                         Required for data discs if tracks don't have size info.
-            
+
         Returns:
             BurnPlan with disc allocations.
-            
+
         Raises:
             PlanningError: If planning fails.
         """
@@ -132,14 +132,14 @@ class DiscPlanningEngine:
         size_lookup: dict[str, int],
     ) -> list[DiscPlan]:
         """Plan using greedy sequential strategy.
-        
+
         This fills each disc in order until it's full,
         then moves to the next disc.
-        
+
         Args:
             tracks: Ordered list of tracks.
             size_lookup: Track ID to size mapping.
-            
+
         Returns:
             List of DiscPlan objects.
         """
@@ -203,13 +203,13 @@ class DiscPlanningEngine:
         track_duration: int,
     ) -> bool:
         """Check if a track fits on the current disc.
-        
+
         Args:
             current_size: Current disc size usage in bytes.
             current_duration: Current disc duration usage in seconds.
             track_size: Track file size in bytes.
             track_duration: Track duration in seconds.
-            
+
         Returns:
             True if track fits, False otherwise.
         """
@@ -234,13 +234,13 @@ class DiscPlanningEngine:
         total_duration_seconds: int | None = None,
     ) -> int:
         """Estimate number of discs needed.
-        
+
         This is a rough estimate, not accounting for track boundaries.
-        
+
         Args:
             total_size_bytes: Total size for data discs.
             total_duration_seconds: Total duration for audio discs.
-            
+
         Returns:
             Estimated number of discs.
         """
@@ -252,10 +252,10 @@ class DiscPlanningEngine:
 
     def get_plan_summary(self, plan: BurnPlan) -> dict:
         """Get a summary of a burn plan.
-        
+
         Args:
             plan: Burn plan to summarize.
-            
+
         Returns:
             Dictionary with plan summary.
         """
@@ -298,10 +298,10 @@ class DiscPlanningEngine:
 
 def plan_to_json(plan: BurnPlan) -> str:
     """Serialize a burn plan to JSON.
-    
+
     Args:
         plan: Burn plan to serialize.
-        
+
     Returns:
         JSON string representation.
     """
@@ -310,10 +310,10 @@ def plan_to_json(plan: BurnPlan) -> str:
 
 def plan_from_json(json_str: str) -> BurnPlan:
     """Deserialize a burn plan from JSON.
-    
+
     Args:
         json_str: JSON string representation.
-        
+
     Returns:
         BurnPlan instance.
     """

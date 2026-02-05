@@ -7,26 +7,26 @@ These models are designed to be:
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class DiscType(str, Enum):
+class DiscType(StrEnum):
     """Type of disc to burn."""
     DATA = "data"
     AUDIO = "audio"
 
 
-class DownloadMode(str, Enum):
+class DownloadMode(StrEnum):
     """How to obtain track files."""
     LOCAL_ONLY = "local-only"
     DOWNLOAD_IF_MISSING = "download-if-missing"
     DOWNLOAD_ALWAYS = "download-always"
 
 
-class OrchestratorState(str, Enum):
+class OrchestratorState(StrEnum):
     """States for the main workflow state machine."""
     INIT = "init"
     AUTHENTICATED = "authenticated"
@@ -40,7 +40,7 @@ class OrchestratorState(str, Enum):
     ERROR = "error"
 
 
-class BurnStatus(str, Enum):
+class BurnStatus(StrEnum):
     """Result status of a burn operation."""
     SUCCESS = "success"
     FAILED = "failed"

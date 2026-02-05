@@ -58,13 +58,13 @@ ProgressCallback = Callable[[DownloadProgress], None]
 
 class Downloader:
     """Downloads track files from Subsonic-compatible servers.
-    
+
     This class handles the actual file downloads, separate from resolution.
     Side effects are isolated here.
-    
+
     Example:
         downloader = Downloader(download_dir=Path("/tmp/navidisc/downloads"))
-        
+
         async for progress in downloader.download(resolved_track):
             print(f"Downloaded: {progress.percent:.1f}%")
     """
@@ -76,7 +76,7 @@ class Downloader:
         timeout: float = 60.0,
     ):
         """Initialize the downloader.
-        
+
         Args:
             download_dir: Directory to save downloaded files.
             chunk_size: Size of download chunks in bytes.
@@ -102,14 +102,14 @@ class Downloader:
         progress_callback: ProgressCallback | None = None,
     ) -> Path:
         """Download a track file.
-        
+
         Args:
             resolved_track: Resolved track with download URL.
             progress_callback: Optional callback for progress updates.
-            
+
         Returns:
             Path to the downloaded file.
-            
+
         Raises:
             DownloadError: If download fails.
             ValueError: If track doesn't need downloading.
@@ -180,11 +180,11 @@ class Downloader:
         progress_callback: ProgressCallback | None = None,
     ) -> dict[str, Path]:
         """Download multiple track files.
-        
+
         Args:
             resolved_tracks: List of resolved tracks to download.
             progress_callback: Optional callback for progress updates.
-            
+
         Returns:
             Dictionary mapping track IDs to downloaded file paths.
         """
@@ -201,10 +201,10 @@ class Downloader:
 
     def _sanitize_filename(self, name: str) -> str:
         """Sanitize a string for use in filenames.
-        
+
         Args:
             name: Original name string.
-            
+
         Returns:
             Sanitized filename-safe string.
         """
@@ -236,12 +236,12 @@ class Downloader:
         expected_hash: str | None = None,
     ) -> bool:
         """Verify a downloaded file's integrity.
-        
+
         Args:
             path: Path to the file.
             expected_size: Expected file size in bytes.
             expected_hash: Expected MD5 hash (optional).
-            
+
         Returns:
             True if verification passes.
         """

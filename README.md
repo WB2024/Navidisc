@@ -110,6 +110,53 @@ navidisc burn playlist --id abc123
 navidisc burn playlist "Road Trip" --disc-type audio
 ```
 
+## Web Interface
+
+Navidisc includes a modern web-based GUI for a more visual experience.
+
+### Start the Web Server
+
+```bash
+# Install web dependencies
+pip install navidisc[web]
+
+# Start the web interface
+navidisc web
+
+# Or specify host and port
+navidisc web --host 0.0.0.0 --port 8080
+```
+
+Then open `http://localhost:8080` in your browser.
+
+### Web Interface Features
+
+- 📋 **Browse Playlists** - View all playlists from your Navidrome server
+- 📊 **Plan Visualization** - See how tracks will be split across discs
+- 🔥 **Burn Workflow** - Real-time progress during burns
+- ⚙️ **Settings UI** - Configure Navidrome connection and burn options
+- 🌗 **Dark Mode** - Automatic dark mode support
+- 📱 **Responsive** - Works on desktop and mobile browsers
+
+### Screenshot
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  🔘 Navidisc           Home  Playlists  Settings    ●  │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│    🔘 Welcome to Navidisc                               │
+│                                                         │
+│    Burn your Navidrome playlists to physical media.     │
+│                                                         │
+│    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐  │
+│    │ 🎵 Browse    │ │ ⚙️ Settings  │ │ ✓ Ready to   │  │
+│    │   Playlists  │ │              │ │   Burn       │  │
+│    └──────────────┘ └──────────────┘ └──────────────┘  │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
 ## CLI Reference
 
 ### Commands

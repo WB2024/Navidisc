@@ -47,13 +47,13 @@ def common_options(f):
 
 def load_config_with_fallback(config_path: Path | None) -> NavidiscConfig:
     """Load configuration with fallback to default path.
-    
+
     Args:
         config_path: Explicit config path or None.
-        
+
     Returns:
         Loaded configuration.
-        
+
     Raises:
         click.ClickException: If config cannot be loaded.
     """
@@ -118,15 +118,15 @@ def burn_playlist(
     quiet: bool,
 ):
     """Burn a playlist to disc.
-    
+
     Specify the playlist by NAME or use --id for the playlist ID.
-    
+
     Examples:
-    
+
         navidisc burn playlist "Road Trip"
-        
+
         navidisc burn playlist --id abc123 --disc-type audio
-        
+
         navidisc burn playlist "Road Trip" --dry-run
     """
     if not name and not playlist_id:
@@ -180,10 +180,9 @@ def burn_playlist(
                     return
 
             # Confirm before burning
-            if not force and not quiet:
-                if not console.confirm("Proceed with burning?"):
-                    console.info("Cancelled")
-                    return
+            if not force and not quiet and not console.confirm("Proceed with burning?"):
+                console.info("Cancelled")
+                return
 
             # Full burn workflow
             progress.start("Starting...")
@@ -234,7 +233,7 @@ def plan_playlist(
     quiet: bool,
 ):
     """Plan how a playlist would be split across discs.
-    
+
     This is equivalent to 'burn playlist --dry-run'.
     """
     # Delegate to burn with dry-run
@@ -369,6 +368,57 @@ def config_show(config: Path | None):
 def config_path():
     """Show default configuration file path."""
     click.echo(get_default_config_path())
+
+
+# =============================================================================
+# Web interface
+# =============================================================================
+
+@cli.command()
+@click.option("--host", "-h", default="127.0.0.1", help="Host to bind to.")
+@click.option("--port", "-p", default=8080, type=int, help="Port to bind to.")
+@click.option("--reload", is_flag=True, help="Enable auto-reload for development.")
+@common_options
+def web(
+    host: str,
+    port: int,
+    reload: bool,
+    config: Path | None,
+    verbose: bool,
+    quiet: bool,
+):
+    """Start the web interface.
+
+    Launches a web server for the Navidisc GUI.
+
+    Examples:
+
+        navidisc web
+
+        navidisc web --port 8000
+
+        navidisc web --host 0.0.0.0 --port 8080
+    """
+    try:
+        import uvicorn
+    except ImportError:
+        raise click.ClickException(
+            "Web dependencies not installed.\n"
+            "Install with: pip install navidisc[web]"
+        )
+
+    console = Console(quiet=quiet)
+    console.info(f"Starting Navidisc web interface at http://{host}:{port}")
+    console.info("Press Ctrl+C to stop")
+
+    uvicorn.run(
+        "navidisc.web:create_app",
+        host=host,
+        port=port,
+        reload=reload,
+        factory=True,
+        log_level="info" if verbose else "warning",
+    )
 
 
 # =============================================================================

@@ -33,6 +33,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+web = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "jinja2>=3.1.0",
+    "python-multipart>=0.0.6",
+]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
@@ -40,6 +46,9 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0",
     "types-PyYAML",
+]
+all = [
+    "navidisc[web,dev]",
 ]
 
 [project.scripts]

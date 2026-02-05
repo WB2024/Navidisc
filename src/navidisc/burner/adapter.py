@@ -43,10 +43,10 @@ class BurnerError(Exception):
 
 class BurnerAdapter(ABC):
     """Abstract base class for disc burning backends.
-    
+
     This provides a clean interface for burning operations,
     separating the execution logic from UI and orchestration.
-    
+
     The adapter handles:
     - Drive detection
     - Burn execution
@@ -69,10 +69,10 @@ class BurnerAdapter(ABC):
     @abstractmethod
     async def check_device(self, device: str) -> tuple[bool, str]:
         """Check if a device is ready for burning.
-        
+
         Args:
             device: Device path (e.g., /dev/sr0).
-            
+
         Returns:
             Tuple of (ready, message).
         """
@@ -87,13 +87,13 @@ class BurnerAdapter(ABC):
         progress_callback: ProgressCallback | None = None,
     ) -> BurnResult:
         """Burn a disc.
-        
+
         Args:
             disc_path: Path to the staged disc directory.
             device: Device path to burn to.
             disc_number: Disc number for tracking.
             progress_callback: Optional callback for progress updates.
-            
+
         Returns:
             BurnResult with burn status.
         """
@@ -102,10 +102,10 @@ class BurnerAdapter(ABC):
     @abstractmethod
     async def eject(self, device: str) -> bool:
         """Eject a disc.
-        
+
         Args:
             device: Device path.
-            
+
         Returns:
             True if ejected successfully.
         """
@@ -117,13 +117,13 @@ class BurnerAdapter(ABC):
         expected_files: list[str],
     ) -> tuple[bool, str]:
         """Verify a burned disc.
-        
+
         Default implementation just checks if device is readable.
-        
+
         Args:
             device: Device path.
             expected_files: List of expected file names.
-            
+
         Returns:
             Tuple of (success, message).
         """
@@ -133,14 +133,14 @@ class BurnerAdapter(ABC):
 
 class GrowIsofsBackend(BurnerAdapter):
     """Burner backend using growisofs for data CDs/DVDs.
-    
+
     This is the primary backend for data disc burning on Linux.
     Requires the dvd+rw-tools package.
     """
 
     def __init__(self, speed: int | None = None):
         """Initialize growisofs backend.
-        
+
         Args:
             speed: Write speed (None for auto).
         """
@@ -311,14 +311,14 @@ class GrowIsofsBackend(BurnerAdapter):
 
 class DryRunBackend(BurnerAdapter):
     """Dry-run backend for testing without burning.
-    
+
     This backend simulates burning operations for testing
     and planning purposes.
     """
 
     def __init__(self, simulate_duration: float = 2.0):
         """Initialize dry-run backend.
-        
+
         Args:
             simulate_duration: Simulated burn duration in seconds.
         """
@@ -406,14 +406,14 @@ def detect_backend(
     dry_run: bool = False,
 ) -> BurnerAdapter:
     """Detect and return an appropriate burner backend.
-    
+
     Args:
         disc_type: Type of disc to burn.
         dry_run: If True, return dry-run backend.
-        
+
     Returns:
         Appropriate BurnerAdapter instance.
-        
+
     Raises:
         BurnerError: If no suitable backend is available.
     """
@@ -437,7 +437,7 @@ def detect_backend(
 
 def list_available_backends() -> list[str]:
     """List available burner backends.
-    
+
     Returns:
         List of available backend names.
     """
