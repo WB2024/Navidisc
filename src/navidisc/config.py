@@ -35,6 +35,18 @@ class BurningConfig(BaseModel):
     media_type: MediaType = Field(default=MediaType.AUTO, description="Physical media type")
     write_speed: WriteSpeed = Field(default=WriteSpeed.AUTO, description="Write speed preset")
     custom_speed: int | None = Field(default=None, description="Custom write speed (when write_speed=custom)")
+
+    @field_validator("media_type", mode="before")
+    @classmethod
+    def default_media_type(cls, v: object) -> object:
+        """Treat None as AUTO for backward compatibility."""
+        return v if v is not None else "auto"
+
+    @field_validator("write_speed", mode="before")
+    @classmethod
+    def default_write_speed(cls, v: object) -> object:
+        """Treat None as AUTO for backward compatibility."""
+        return v if v is not None else "auto"
     disc_size_mb: int = Field(default=700, ge=100, le=30000, description="Disc capacity in MB")
     audio_disc_minutes: int = Field(default=80, ge=20, le=100, description="Audio CD capacity in minutes")
     verify_after_burn: bool = Field(default=True, description="Verify disc after burning")
