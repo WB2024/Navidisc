@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "navidisc"
+version = "0.1.0"
+description = "Convert Navidrome playlists to physical CDs"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.11"
+authors = [
+    { name = "Navidisc Contributors" }
+]
+keywords = ["navidrome", "subsonic", "cd", "burning", "playlist"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio",
+]
+dependencies = [
+    "httpx>=0.25.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "rich>=13.0",
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+    "types-PyYAML",
+]
+
+[project.scripts]
+navidisc = "navidisc.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/navidisc/navidisc"
+Documentation = "https://github.com/navidisc/navidisc#readme"
+Repository = "https://github.com/navidisc/navidisc"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/navidisc"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
