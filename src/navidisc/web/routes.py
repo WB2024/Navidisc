@@ -240,11 +240,20 @@ async def get_playlist_details(request: Request, playlist_id: str):
 
 
 @router.post("/api/config", response_class=HTMLResponse)
-async def save_configuration(request: Request, config_data: ConfigUpdate):
+async def save_configuration(request: Request):
     """Save configuration."""
     templates = get_templates(request)
 
     try:
+        # Get form data
+        form = await request.form()
+        navidrome_url = form.get("navidrome_url")
+        navidrome_username = form.get("navidrome_username")
+        navidrome_password = form.get("navidrome_password")
+        device = form.get("device", "/dev/sr0")
+        disc_type = form.get("disc_type", "data")
+        disc_size_mb = int(form.get("disc_size_mb", "700"))
+
         # Build config object
         from navidisc.config import (
             BurningConfig,
@@ -256,14 +265,14 @@ async def save_configuration(request: Request, config_data: ConfigUpdate):
 
         config = NavidiscConfig(
             navidrome=NavidromeConfig(
-                url=config_data.navidrome_url,
-                username=config_data.navidrome_username,
-                password=config_data.navidrome_password,
+                url=navidrome_url,
+                username=navidrome_username,
+                password=navidrome_password,
             ),
             burning=BurningConfig(
-                device=config_data.device,
-                disc_type=DiscType(config_data.disc_type),
-                disc_size_mb=config_data.disc_size_mb,
+                device=device,
+                disc_type=DiscType(disc_type),
+                disc_size_mb=disc_size_mb,
             ),
             media=MediaConfig(),
             logging=LoggingConfig(),

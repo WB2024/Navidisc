@@ -93,6 +93,7 @@
                 <div>
                     <button type="button"
                             hx-post="/api/test-connection"
+                            hx-include="[name='navidrome_url'], [name='navidrome_username'], [name='navidrome_password']"
                             hx-target="#connection-result"
                             hx-swap="innerHTML"
                             class="inline-flex items-center px-4 py-2 border border-surface-300 dark:border-surface-600 
