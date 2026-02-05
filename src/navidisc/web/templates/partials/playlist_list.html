@@ -13,7 +13,7 @@
                         {{ playlist.name }}
                     </h3>
                     <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
-                        {{ playlist.tracks|length }} tracks
+                        {{ playlist.track_count }} tracks
                         {% if playlist.duration_seconds %}
                         · {{ (playlist.duration_seconds / 60)|int }} min
                         {% endif %}

@@ -103,6 +103,7 @@ async def playlists_page(request: Request):
         {
             "request": request,
             "config": config,
+            "has_config": config is not None,
         },
     )
 
@@ -118,6 +119,7 @@ async def settings_page(request: Request):
         {
             "request": request,
             "config": config,
+            "has_config": config is not None,
         },
     )
 
@@ -137,6 +139,7 @@ async def burn_page(request: Request, playlist_id: str):
             "request": request,
             "config": config,
             "playlist_id": playlist_id,
+            "has_config": config is not None,
         },
     )
 
@@ -247,12 +250,27 @@ async def save_configuration(request: Request):
     try:
         # Get form data
         form = await request.form()
-        navidrome_url = form.get("navidrome_url")
-        navidrome_username = form.get("navidrome_username")
-        navidrome_password = form.get("navidrome_password")
+        navidrome_url = form.get("navidrome_url", "").strip()
+        navidrome_username = form.get("navidrome_username", "").strip()
+        navidrome_password = form.get("navidrome_password", "")
         device = form.get("device", "/dev/sr0")
         disc_type = form.get("disc_type", "data")
-        disc_size_mb = int(form.get("disc_size_mb", "700"))
+        
+        # Validate required fields
+        if not navidrome_url or not navidrome_username or not navidrome_password:
+            return templates.TemplateResponse(
+                "partials/error.html",
+                {"request": request, "message": "All Navidrome fields are required"},
+            )
+        
+        # Validate disc size
+        try:
+            disc_size_mb = int(form.get("disc_size_mb", "700"))
+        except ValueError:
+            return templates.TemplateResponse(
+                "partials/error.html",
+                {"request": request, "message": "Invalid disc size value"},
+            )
 
         # Build config object
         from navidisc.config import (

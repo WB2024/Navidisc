@@ -172,6 +172,11 @@ function burnWorkflow() {
         events: [],
         sessionId: null,
         eventSource: null,
+        
+        getPlaylistName() {
+            const planEl = document.getElementById('burn-plan-content');
+            return planEl ? planEl.dataset.playlistName : 'Playlist';
+        },
 
         async startBurn(playlistId) {
             this.burning = true;
@@ -179,7 +184,9 @@ function burnWorkflow() {
             this.error = false;
             this.progress = 0;
             this.events = [];
-            this.addEvent('info', 'Starting burn workflow...');
+            
+            const playlistName = this.getPlaylistName();
+            this.addEvent('info', `Starting burn for "${playlistName}"...`);
 
             try {
                 // Start burn session
@@ -190,7 +197,7 @@ function burnWorkflow() {
                     },
                     body: JSON.stringify({
                         playlist_id: playlistId,
-                        playlist_name: 'Playlist',
+                        playlist_name: playlistName,
                         dry_run: this.dryRun
                     })
                 });
@@ -201,7 +208,7 @@ function burnWorkflow() {
 
                 const data = await response.json();
                 this.sessionId = data.session_id;
-                this.addEvent('info', `Session started: ${this.sessionId}`);
+                this.addEvent('info', 'Connecting to server...');
 
                 // Connect to SSE stream
                 this.connectEventStream();
@@ -232,40 +239,68 @@ function burnWorkflow() {
 
             switch (eventType) {
                 case 'state_changed':
-                    this.currentStatus = eventData.state || 'Processing...';
-                    this.addEvent('info', `State: ${eventData.state}`);
+                    // Format state nicely (e.g., "AUTHENTICATED" -> "Authenticated")
+                    const state = (eventData.state || 'Processing').toLowerCase().replace(/_/g, ' ');
+                    const formattedState = state.charAt(0).toUpperCase() + state.slice(1);
+                    this.currentStatus = formattedState;
+                    this.addEvent('info', formattedState);
                     break;
+                    
                 case 'progress':
-                    this.progress = eventData.percent || this.progress;
-                    this.currentStatus = eventData.message || this.currentStatus;
+                    // Update progress if percent provided
+                    if (eventData.percent !== undefined) {
+                        this.progress = eventData.percent;
+                    }
+                    // Update status and log based on step
+                    if (eventData.message) {
+                        this.currentStatus = eventData.message;
+                        // Log meaningful progress events
+                        const step = eventData.step || '';
+                        if (step === 'download' && eventData.track) {
+                            // Show download progress for individual tracks
+                            this.addEvent('info', `Downloading: ${eventData.track}`);
+                        } else if (!step.startsWith('download') || eventData.message.includes('Downloading')) {
+                            // Log other progress messages (avoid duplicate download messages)
+                            this.addEvent('info', eventData.message);
+                        }
+                    }
+                    // Map steps to progress percentages for smoother UX
+                    this.updateProgressForStep(eventData.step);
                     break;
-                case 'download_started':
-                    this.addEvent('info', `Downloading: ${eventData.track_name || 'track'}`);
+                    
+                case 'disc_required':
+                    this.addEvent('warning', `Insert disc ${eventData.disc_number || ''}`);
                     break;
-                case 'download_complete':
-                    this.addEvent('success', `Downloaded: ${eventData.track_name || 'track'}`);
-                    break;
-                case 'staging_started':
-                    this.addEvent('info', 'Staging files...');
-                    this.progress = 50;
-                    break;
-                case 'staging_complete':
-                    this.addEvent('success', 'Files staged');
+                    
+                case 'burn_started':
+                    this.currentStatus = `Burning disc ${eventData.disc_number || ''}...`;
+                    this.addEvent('info', `Starting burn for disc ${eventData.disc_number || ''}`);
                     this.progress = 70;
                     break;
-                case 'burn_started':
-                    this.currentStatus = 'Burning disc...';
-                    this.addEvent('info', 'Burn started');
-                    this.progress = 80;
+                    
+                case 'burn_progress':
+                    if (eventData.percent !== undefined) {
+                        // Map burn progress to 70-95%
+                        this.progress = 70 + (eventData.percent * 0.25);
+                    }
                     break;
-                case 'burn_complete':
-                    this.addEvent('success', 'Burn complete');
+                    
+                case 'burn_completed':
+                    this.addEvent('success', `Disc ${eventData.disc_number || ''} burned successfully`);
+                    this.progress = 95;
+                    break;
+                    
+                case 'complete':
+                    this.addEvent('success', `Workflow complete! ${eventData.total_discs || 1} disc(s) processed`);
                     this.progress = 100;
+                    this.currentStatus = 'Complete';
                     break;
+                    
                 case 'error':
-                    this.addEvent('error', eventData.message || 'Unknown error');
+                    this.addEvent('error', eventData.message || 'An error occurred');
                     this.error = true;
                     break;
+                    
                 case 'done':
                     this.complete = true;
                     this.progress = 100;
@@ -274,11 +309,36 @@ function burnWorkflow() {
                         this.eventSource.close();
                     }
                     break;
+                    
                 case 'keepalive':
-                    // Ignore keepalive
+                    // Ignore keepalive silently
                     break;
+                    
                 default:
-                    this.addEvent('info', `${eventType}: ${JSON.stringify(eventData)}`);
+                    // Log unknown events in a cleaner format
+                    if (eventData.message) {
+                        this.addEvent('info', eventData.message);
+                    }
+            }
+        },
+        
+        updateProgressForStep(step) {
+            // Map workflow steps to approximate progress percentages
+            const stepProgress = {
+                'authenticate': 5,
+                'fetch_playlist': 10,
+                'resolve_tracks': 20,
+                'download_tracks': 30,
+                'download': 40,  // During downloads
+                'planning': 50,
+                'planned': 55,
+                'staging': 60,
+                'staged': 65,
+                'burning': 75,
+                'burned': 90
+            };
+            if (step && stepProgress[step] !== undefined) {
+                this.progress = Math.max(this.progress, stepProgress[step]);
             }
         },
 
@@ -286,7 +346,12 @@ function burnWorkflow() {
             const now = new Date();
             const time = now.toLocaleTimeString('en-US', { hour12: false });
             this.events.push({ type, message, time });
-            // Auto-scroll to bottom would go here
+            
+            // Auto-scroll the log to bottom
+            this.$nextTick(() => {
+                const log = document.querySelector('.font-mono.overflow-y-auto');
+                if (log) log.scrollTop = log.scrollHeight;
+            });
         }
     }
 }
