@@ -290,6 +290,11 @@ class Orchestrator:
             )
             raise
 
+        finally:
+            # Clean up downloaded/converted files if auto-cleanup is enabled
+            if self.config.media.auto_cleanup:
+                self._cleanup_local_files()
+
         return self.session
 
     async def _step_authenticate(self) -> None:
@@ -552,6 +557,47 @@ class Orchestrator:
         await self._step_plan()
 
         return self.session.burn_plan
+
+    # =========================================================================
+    # Cleanup
+    # =========================================================================
+
+    def _cleanup_local_files(self) -> None:
+        """Delete locally downloaded and converted files.
+
+        Only removes files managed by Navidisc inside the staging directory
+        (downloads/ and converted/ sub-folders).  Never touches files on
+        the Navidrome server or any other remote location.
+        """
+        staging_dir = self.config.media.staging_dir
+        removed = 0
+
+        for subdir_name in ("downloads", "converted"):
+            subdir = staging_dir / subdir_name
+            if subdir.exists() and subdir.is_dir():
+                try:
+                    shutil.rmtree(subdir)
+                    removed += 1
+                    logger.info("Auto-cleanup: removed %s", subdir)
+                except OSError as exc:
+                    logger.warning("Auto-cleanup: failed to remove %s: %s", subdir, exc)
+
+        # Also remove disc staging directories (disc_01, disc_02 …)
+        if staging_dir.exists():
+            for entry in staging_dir.iterdir():
+                if entry.is_dir() and entry.name.startswith("disc_"):
+                    try:
+                        shutil.rmtree(entry)
+                        removed += 1
+                        logger.info("Auto-cleanup: removed %s", entry)
+                    except OSError as exc:
+                        logger.warning("Auto-cleanup: failed to remove %s: %s", entry, exc)
+
+        if removed:
+            self._emit(OrchestratorEvent.PROGRESS, {
+                "step": "cleanup",
+                "message": f"Auto-cleanup: removed {removed} temporary director{'y' if removed == 1 else 'ies'}",
+            })
 
     # =========================================================================
     # Context manager support

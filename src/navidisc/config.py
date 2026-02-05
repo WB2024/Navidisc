@@ -89,6 +89,10 @@ class MediaConfig(BaseModel):
         default=True,
         description="Prefix filenames with track numbers"
     )
+    auto_cleanup: bool = Field(
+        default=False,
+        description="Delete downloaded and converted files after burn completes or is cancelled"
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

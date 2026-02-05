@@ -258,6 +258,7 @@ async def save_configuration(request: Request):
         media_type = form.get("media_type", "auto")
         write_speed = form.get("write_speed", "auto")
         conversion_quality = form.get("conversion_quality", "disabled")
+        auto_cleanup = form.get("auto_cleanup") == "true"
         
         # Validate required fields
         if not navidrome_url or not navidrome_username or not navidrome_password:
@@ -299,6 +300,7 @@ async def save_configuration(request: Request):
             ),
             media=MediaConfig(
                 conversion_quality=ConversionQuality(conversion_quality),
+                auto_cleanup=auto_cleanup,
             ),
             logging=LoggingConfig(),
         )

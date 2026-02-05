@@ -306,6 +306,31 @@
                         Convert FLAC, WAV, and other formats to MP3 before burning. Requires ffmpeg.
                     </p>
                 </div>
+
+                <!-- Auto Cleanup -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <label for="auto_cleanup" class="text-sm font-medium text-surface-700 dark:text-surface-300">
+                            Auto-Delete Local Files
+                        </label>
+                        <p class="text-xs text-surface-500 dark:text-surface-400">
+                            Automatically delete downloaded and converted files after burning completes or is cancelled.
+                            Only removes local temporary copies — never touches files on your Navidrome server.
+                        </p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer ml-4 flex-shrink-0">
+                        <input type="checkbox" name="auto_cleanup" id="auto_cleanup" value="true"
+                               {% if config and config.media.auto_cleanup %}checked{% endif %}
+                               class="sr-only peer">
+                        <div class="w-11 h-6 bg-surface-300 dark:bg-surface-600 
+                                    peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-500 
+                                    rounded-full peer peer-checked:after:translate-x-full 
+                                    peer-checked:after:border-white after:content-[''] after:absolute 
+                                    after:top-[2px] after:left-[2px] after:bg-white after:border-surface-300 
+                                    after:border after:rounded-full after:h-5 after:w-5 after:transition-all 
+                                    peer-checked:bg-primary-600"></div>
+                    </label>
+                </div>
             </div>
         </div>
 
