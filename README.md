@@ -145,7 +145,7 @@ Then open `http://localhost:8080` in your browser.
 #### Home Page
 The main dashboard showing quick access to playlists, settings, and current configuration status.
 
-
+![Home Page](docs/screenshots/Home.jpg)
 
 #### Features Overview
 Highlights the key features of Navidisc including Data DVDs, Audio CDs, and Smart Planning capabilities.
