@@ -4,6 +4,7 @@ This module provides:
 - Abstract interface for disc burning
 - Backend implementations for growisofs, cdrecord
 - Drive detection and readiness checking
+- Intelligent speed calculation
 - Dry-run mode for testing
 """
 
@@ -14,7 +15,13 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from navidisc.models import BurnResult, BurnStatus, DiscType
+from navidisc.burner.drive import (
+    DriveInfo,
+    SpeedRecommendation,
+    calculate_write_speed,
+    detect_drive_info,
+)
+from navidisc.models import BurnResult, BurnStatus, DiscType, MediaType, WriteSpeed
 
 
 class BurnProgress:
@@ -138,13 +145,24 @@ class GrowIsofsBackend(BurnerAdapter):
     Requires the dvd+rw-tools package.
     """
 
-    def __init__(self, speed: int | None = None):
+    def __init__(
+        self,
+        media_type: MediaType = MediaType.AUTO,
+        write_speed: WriteSpeed = WriteSpeed.AUTO,
+        custom_speed: int | None = None,
+    ):
         """Initialize growisofs backend.
 
         Args:
-            speed: Write speed (None for auto).
+            media_type: Type of media being used.
+            write_speed: Speed preset.
+            custom_speed: Custom speed value (when write_speed=CUSTOM).
         """
-        self.speed = speed
+        self.media_type = media_type
+        self.write_speed_preset = write_speed
+        self.custom_speed = custom_speed
+        self._drive_info: DriveInfo | None = None
+        self._speed_recommendation: SpeedRecommendation | None = None
 
     @property
     def name(self) -> str:
@@ -160,9 +178,20 @@ class GrowIsofsBackend(BurnerAdapter):
         return shutil.which("growisofs") is not None
 
     async def check_device(self, device: str) -> tuple[bool, str]:
-        """Check if device is ready for burning."""
+        """Check if device is ready for burning and detect capabilities."""
         if not Path(device).exists():
             return False, f"Device {device} does not exist"
+
+        # Detect drive capabilities
+        self._drive_info = await detect_drive_info(device)
+        
+        # Calculate recommended speed
+        self._speed_recommendation = calculate_write_speed(
+            write_speed_preset=self.write_speed_preset,
+            media_type=self.media_type,
+            drive_info=self._drive_info,
+            custom_speed=self.custom_speed,
+        )
 
         # Try to get device info using lsblk
         try:
@@ -180,11 +209,28 @@ class GrowIsofsBackend(BurnerAdapter):
             if "rom" not in output.lower():
                 return False, f"Device {device} does not appear to be an optical drive"
 
-            return True, "Device ready"
+            # Build status message with drive info
+            status_parts = ["Device ready"]
+            if self._drive_info:
+                status_parts.append(f"Drive: {self._drive_info.vendor} {self._drive_info.model}")
+            if self._speed_recommendation:
+                status_parts.append(f"Speed: {self._speed_recommendation.reason}")
+            
+            return True, " | ".join(status_parts)
 
         except FileNotFoundError:
             # lsblk not available, just check device exists
             return True, "Device exists (unable to verify type)"
+    
+    @property
+    def drive_info(self) -> DriveInfo | None:
+        """Get detected drive information."""
+        return self._drive_info
+    
+    @property
+    def speed_recommendation(self) -> SpeedRecommendation | None:
+        """Get calculated speed recommendation."""
+        return self._speed_recommendation
 
     async def burn(
         self,
@@ -195,6 +241,15 @@ class GrowIsofsBackend(BurnerAdapter):
     ) -> BurnResult:
         """Burn a data disc using growisofs."""
         started_at = datetime.now()
+        
+        # Ensure we have speed recommendation
+        if not self._speed_recommendation:
+            self._speed_recommendation = calculate_write_speed(
+                write_speed_preset=self.write_speed_preset,
+                media_type=self.media_type,
+                drive_info=self._drive_info,
+                custom_speed=self.custom_speed,
+            )
 
         if progress_callback:
             progress_callback(BurnProgress(
@@ -212,8 +267,9 @@ class GrowIsofsBackend(BurnerAdapter):
             "-V", f"DISC_{disc_number:02d}",  # Volume label
         ]
 
-        if self.speed:
-            cmd.extend(["-speed=%d" % self.speed])
+        # Add speed if we have a recommendation (0 means auto/let drive decide)
+        if self._speed_recommendation and self._speed_recommendation.speed_x > 0:
+            cmd.extend(["-speed=%d" % self._speed_recommendation.speed_x])
 
         cmd.append(str(disc_path))
 
@@ -403,12 +459,18 @@ class DryRunBackend(BurnerAdapter):
 
 def detect_backend(
     disc_type: DiscType = DiscType.DATA,
+    media_type: MediaType = MediaType.AUTO,
+    write_speed: WriteSpeed = WriteSpeed.AUTO,
+    custom_speed: int | None = None,
     dry_run: bool = False,
 ) -> BurnerAdapter:
     """Detect and return an appropriate burner backend.
 
     Args:
-        disc_type: Type of disc to burn.
+        disc_type: Type of disc to burn (data/audio).
+        media_type: Physical media type (CD-R, DVD-R, etc.).
+        write_speed: Speed preset (auto, max, safe, custom).
+        custom_speed: Custom speed value when write_speed=CUSTOM.
         dry_run: If True, return dry-run backend.
 
     Returns:
@@ -422,7 +484,11 @@ def detect_backend(
 
     if disc_type == DiscType.DATA:
         if GrowIsofsBackend.is_available():
-            return GrowIsofsBackend()
+            return GrowIsofsBackend(
+                media_type=media_type,
+                write_speed=write_speed,
+                custom_speed=custom_speed,
+            )
         raise BurnerError(
             "No data disc backend available. "
             "Please install dvd+rw-tools (growisofs)."

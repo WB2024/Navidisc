@@ -190,6 +190,74 @@
                         </option>
                     </select>
                 </div>
+                
+                <!-- Media Type -->
+                <div>
+                    <label for="media_type" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                        Media Type
+                    </label>
+                    <select name="media_type" 
+                            id="media_type"
+                            class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
+                                   bg-white dark:bg-surface-700 text-surface-900 dark:text-white
+                                   shadow-sm focus:border-primary-500 focus:ring-primary-500 
+                                   px-3 py-2 border">
+                        <option value="auto" {% if not config or config.burning.media_type.value == 'auto' %}selected{% endif %}>
+                            Auto-detect
+                        </option>
+                        <optgroup label="CD">
+                            <option value="cd-r-52x" {% if config and config.burning.media_type.value == 'cd-r-52x' %}selected{% endif %}>CD-R 52x (7.8 MB/s max)</option>
+                            <option value="cd-r-48x" {% if config and config.burning.media_type.value == 'cd-r-48x' %}selected{% endif %}>CD-R 48x (7.2 MB/s max)</option>
+                            <option value="cd-r-32x" {% if config and config.burning.media_type.value == 'cd-r-32x' %}selected{% endif %}>CD-R 32x (4.8 MB/s max)</option>
+                            <option value="cd-rw-24x" {% if config and config.burning.media_type.value == 'cd-rw-24x' %}selected{% endif %}>CD-RW 24x</option>
+                            <option value="cd-rw-12x" {% if config and config.burning.media_type.value == 'cd-rw-12x' %}selected{% endif %}>CD-RW 12x</option>
+                        </optgroup>
+                        <optgroup label="DVD">
+                            <option value="dvd-r-16x" {% if config and config.burning.media_type.value == 'dvd-r-16x' %}selected{% endif %}>DVD-R 16x (21.6 MB/s max)</option>
+                            <option value="dvd-r-8x" {% if config and config.burning.media_type.value == 'dvd-r-8x' %}selected{% endif %}>DVD-R 8x (10.8 MB/s max)</option>
+                            <option value="dvd+r-16x" {% if config and config.burning.media_type.value == 'dvd+r-16x' %}selected{% endif %}>DVD+R 16x</option>
+                            <option value="dvd+r-8x" {% if config and config.burning.media_type.value == 'dvd+r-8x' %}selected{% endif %}>DVD+R 8x</option>
+                            <option value="dvd-rw-6x" {% if config and config.burning.media_type.value == 'dvd-rw-6x' %}selected{% endif %}>DVD-RW 6x</option>
+                            <option value="dvd+rw-8x" {% if config and config.burning.media_type.value == 'dvd+rw-8x' %}selected{% endif %}>DVD+RW 8x</option>
+                            <option value="dvd-r-dl-8x" {% if config and config.burning.media_type.value == 'dvd-r-dl-8x' %}selected{% endif %}>DVD-R DL 8x</option>
+                            <option value="dvd+r-dl-8x" {% if config and config.burning.media_type.value == 'dvd+r-dl-8x' %}selected{% endif %}>DVD+R DL 8x</option>
+                        </optgroup>
+                        <optgroup label="Blu-ray">
+                            <option value="bd-r-16x" {% if config and config.burning.media_type.value == 'bd-r-16x' %}selected{% endif %}>BD-R 16x (72 MB/s max)</option>
+                            <option value="bd-r-6x" {% if config and config.burning.media_type.value == 'bd-r-6x' %}selected{% endif %}>BD-R 6x (27 MB/s max)</option>
+                            <option value="bd-re-2x" {% if config and config.burning.media_type.value == 'bd-re-2x' %}selected{% endif %}>BD-RE 2x</option>
+                        </optgroup>
+                    </select>
+                    <p class="mt-1 text-xs text-surface-500 dark:text-surface-400">
+                        Select your disc media type for optimal speed calculation
+                    </p>
+                </div>
+                
+                <!-- Write Speed -->
+                <div>
+                    <label for="write_speed" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                        Write Speed
+                    </label>
+                    <select name="write_speed" 
+                            id="write_speed"
+                            class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
+                                   bg-white dark:bg-surface-700 text-surface-900 dark:text-white
+                                   shadow-sm focus:border-primary-500 focus:ring-primary-500 
+                                   px-3 py-2 border">
+                        <option value="auto" {% if not config or config.burning.write_speed.value == 'auto' %}selected{% endif %}>
+                            Auto - Drive determines optimal speed (~70% of max)
+                        </option>
+                        <option value="max" {% if config and config.burning.write_speed.value == 'max' %}selected{% endif %}>
+                            Maximum - Fastest burn, may reduce reliability
+                        </option>
+                        <option value="safe" {% if config and config.burning.write_speed.value == 'safe' %}selected{% endif %}>
+                            Safe - Conservative speed for best reliability (~50% of max)
+                        </option>
+                    </select>
+                    <p class="mt-1 text-xs text-surface-500 dark:text-surface-400">
+                        The actual speed is calculated based on your drive and media capabilities
+                    </p>
+                </div>
             </div>
         </div>
 

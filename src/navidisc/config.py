@@ -11,7 +11,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from navidisc.models import ConversionQuality, DiscType, DownloadMode
+from navidisc.models import ConversionQuality, DiscType, DownloadMode, MediaType, WriteSpeed
 
 
 class NavidromeConfig(BaseModel):
@@ -32,9 +32,11 @@ class BurningConfig(BaseModel):
     """Disc burning settings."""
     device: str = Field(default="/dev/sr0", description="Optical drive device path")
     disc_type: DiscType = Field(default=DiscType.DATA, description="Type of disc to create")
-    disc_size_mb: int = Field(default=700, ge=100, le=9000, description="Disc capacity in MB")
+    media_type: MediaType = Field(default=MediaType.AUTO, description="Physical media type")
+    write_speed: WriteSpeed = Field(default=WriteSpeed.AUTO, description="Write speed preset")
+    custom_speed: int | None = Field(default=None, description="Custom write speed (when write_speed=custom)")
+    disc_size_mb: int = Field(default=700, ge=100, le=30000, description="Disc capacity in MB")
     audio_disc_minutes: int = Field(default=80, ge=20, le=100, description="Audio CD capacity in minutes")
-    write_speed: int | None = Field(default=None, description="Write speed (None for auto)")
     verify_after_burn: bool = Field(default=True, description="Verify disc after burning")
     eject_after_burn: bool = Field(default=True, description="Eject disc after burning")
 

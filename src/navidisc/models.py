@@ -35,6 +35,39 @@ class ConversionQuality(StrEnum):
     SMALL = "small"  # 128kbps CBR, smallest size
 
 
+class MediaType(StrEnum):
+    """Physical disc media type with max speed rating."""
+    # CD types
+    CD_R_52X = "cd-r-52x"  # Standard CD-R, 52x max (7800 KB/s)
+    CD_R_48X = "cd-r-48x"  # 48x CD-R (7200 KB/s)
+    CD_R_32X = "cd-r-32x"  # 32x CD-R (4800 KB/s)
+    CD_RW_24X = "cd-rw-24x"  # CD-RW, 24x max
+    CD_RW_12X = "cd-rw-12x"  # CD-RW, 12x
+    # DVD types
+    DVD_R_16X = "dvd-r-16x"  # Standard DVD-R, 16x max
+    DVD_R_8X = "dvd-r-8x"  # 8x DVD-R
+    DVD_PLUS_R_16X = "dvd+r-16x"  # DVD+R, 16x max
+    DVD_PLUS_R_8X = "dvd+r-8x"  # DVD+R, 8x
+    DVD_RW_6X = "dvd-rw-6x"  # DVD-RW, 6x max
+    DVD_PLUS_RW_8X = "dvd+rw-8x"  # DVD+RW, 8x max
+    DVD_R_DL_8X = "dvd-r-dl-8x"  # DVD-R Dual Layer
+    DVD_PLUS_R_DL_8X = "dvd+r-dl-8x"  # DVD+R Dual Layer
+    # Blu-ray types
+    BD_R_16X = "bd-r-16x"  # BD-R, 16x max
+    BD_R_6X = "bd-r-6x"  # BD-R, 6x
+    BD_RE_2X = "bd-re-2x"  # BD-RE, 2x max
+    # Auto-detect
+    AUTO = "auto"  # Detect from inserted media
+
+
+class WriteSpeed(StrEnum):
+    """Write speed presets."""
+    AUTO = "auto"  # Let drive determine optimal speed
+    MAX = "max"  # Use maximum speed for media type
+    SAFE = "safe"  # Use conservative speed for reliability
+    CUSTOM = "custom"  # Use custom speed value
+
+
 class OrchestratorState(StrEnum):
     """States for the main workflow state machine."""
     INIT = "init"

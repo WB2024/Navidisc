@@ -226,6 +226,9 @@ class Orchestrator:
         if self._burner is None:
             self._burner = detect_backend(
                 disc_type=self.config.burning.disc_type,
+                media_type=self.config.burning.media_type,
+                write_speed=self.config.burning.write_speed,
+                custom_speed=self.config.burning.custom_speed,
                 dry_run=self.dry_run,
             )
         return self._burner
