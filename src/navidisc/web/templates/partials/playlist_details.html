@@ -40,7 +40,7 @@
             <div>
                 <span class="text-primary-600 dark:text-primary-400">Total Size:</span>
                 <span class="ml-2 font-semibold text-primary-900 dark:text-primary-100">
-                    {{ (plan_summary.total_bytes / 1024 / 1024)|round(1) }} MB
+                    {{ plan_summary.total_size_mb|round(1) }} MB
                 </span>
             </div>
             <div>

@@ -263,13 +263,25 @@ class DiscPlanningEngine:
         total_size = sum(d.total_size_bytes for d in plan.discs)
         total_duration = sum(d.total_duration_seconds for d in plan.discs)
 
+        # Calculate average utilization
+        total_utilizations = []
+        for disc in plan.discs:
+            if plan.disc_type == DiscType.DATA and plan.disc_capacity_bytes:
+                total_utilizations.append(disc.total_size_bytes / plan.disc_capacity_bytes)
+            elif plan.disc_type == DiscType.AUDIO and plan.disc_capacity_seconds:
+                total_utilizations.append(disc.total_duration_seconds / plan.disc_capacity_seconds)
+        
+        avg_utilization = sum(total_utilizations) / len(total_utilizations) if total_utilizations else 0
+
         summary = {
             "playlist_name": plan.playlist_name,
             "disc_type": plan.disc_type.value,
             "total_discs": plan.total_discs,
             "total_tracks": total_tracks,
+            "total_bytes": total_size,
             "total_size_mb": total_size / (1024 * 1024),
             "total_duration_minutes": total_duration / 60,
+            "average_utilization": avg_utilization,
             "discs": [],
         }
 
