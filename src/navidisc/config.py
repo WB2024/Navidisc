@@ -7,10 +7,9 @@ Provides schema-validated, YAML-based configuration that is:
 """
 
 from pathlib import Path
-from typing import Optional
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from navidisc.models import DiscType, DownloadMode
 
@@ -35,7 +34,7 @@ class BurningConfig(BaseModel):
     disc_type: DiscType = Field(default=DiscType.DATA, description="Type of disc to create")
     disc_size_mb: int = Field(default=700, ge=100, le=9000, description="Disc capacity in MB")
     audio_disc_minutes: int = Field(default=80, ge=20, le=100, description="Audio CD capacity in minutes")
-    write_speed: Optional[int] = Field(default=None, description="Write speed (None for auto)")
+    write_speed: int | None = Field(default=None, description="Write speed (None for auto)")
     verify_after_burn: bool = Field(default=True, description="Verify disc after burning")
     eject_after_burn: bool = Field(default=True, description="Eject disc after burning")
 
@@ -73,18 +72,16 @@ class MediaConfig(BaseModel):
         description="Prefix filenames with track numbers"
     )
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class LoggingConfig(BaseModel):
     """Logging settings."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     level: str = Field(default="INFO", description="Log level")
     format: str = Field(default="text", description="Log format: text or json")
-    file: Optional[Path] = Field(default=None, description="Log file path")
-
-    class Config:
-        arbitrary_types_allowed = True
+    file: Path | None = Field(default=None, description="Log file path")
 
 
 class NavidiscConfig(BaseModel):
@@ -108,7 +105,7 @@ def load_config(path: Path) -> NavidiscConfig:
         FileNotFoundError: If config file doesn't exist.
         ValidationError: If config is invalid.
     """
-    with open(path, "r") as f:
+    with open(path) as f:
         data = yaml.safe_load(f)
     return NavidiscConfig.model_validate(data)
 
@@ -121,10 +118,10 @@ def save_config(config: NavidiscConfig, path: Path) -> None:
         path: Path to write the configuration file.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Convert to dict, handling Path objects
     data = config.model_dump(mode="json")
-    
+
     with open(path, "w") as f:
         yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
 

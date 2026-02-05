@@ -9,7 +9,6 @@ This module provides:
 
 from datetime import datetime
 from enum import Enum
-from typing import Callable
 
 from navidisc.models import BurnPlan, DiscPlan, DiscType, Playlist, Track
 
@@ -42,11 +41,11 @@ class DiscPlanningEngine:
         )
         plan = engine.plan(playlist, tracks_with_sizes)
     """
-    
+
     # Default capacities
     DEFAULT_DATA_CD_BYTES = 700 * 1024 * 1024  # 700 MB
     DEFAULT_AUDIO_CD_SECONDS = 80 * 60  # 80 minutes
-    
+
     def __init__(
         self,
         disc_type: DiscType = DiscType.DATA,
@@ -64,7 +63,7 @@ class DiscPlanningEngine:
         """
         self.disc_type = disc_type
         self.strategy = strategy
-        
+
         # Set capacities based on disc type
         if disc_type == DiscType.DATA:
             self.disc_capacity_bytes = disc_capacity_bytes or self.DEFAULT_DATA_CD_BYTES
@@ -72,7 +71,7 @@ class DiscPlanningEngine:
         else:
             self.disc_capacity_bytes = None
             self.disc_capacity_seconds = disc_capacity_seconds or self.DEFAULT_AUDIO_CD_SECONDS
-    
+
     def plan(
         self,
         playlist: Playlist,
@@ -93,10 +92,10 @@ class DiscPlanningEngine:
         """
         if not playlist.tracks:
             raise PlanningError("Playlist has no tracks")
-        
+
         # Build size/duration lookup
         size_lookup = track_sizes or {}
-        
+
         # Verify we have required info
         for track in playlist.tracks:
             if self.disc_type == DiscType.DATA:
@@ -110,13 +109,13 @@ class DiscPlanningEngine:
                     raise PlanningError(
                         f"Track '{track.title}' has no duration information"
                     )
-        
+
         # Plan using selected strategy
         if self.strategy == PlanningStrategy.GREEDY_SEQUENTIAL:
             discs = self._plan_greedy_sequential(playlist.tracks, size_lookup)
         else:
             raise PlanningError(f"Unknown planning strategy: {self.strategy}")
-        
+
         return BurnPlan(
             playlist_id=playlist.id,
             playlist_name=playlist.name,
@@ -126,7 +125,7 @@ class DiscPlanningEngine:
             discs=discs,
             created_at=datetime.now(),
         )
-    
+
     def _plan_greedy_sequential(
         self,
         tracks: list[Track],
@@ -148,11 +147,11 @@ class DiscPlanningEngine:
         current_disc_tracks: list[str] = []
         current_size = 0
         current_duration = 0
-        
+
         for track in tracks:
             track_size = size_lookup.get(track.id) or track.size_bytes or 0
             track_duration = track.duration_seconds
-            
+
             # Check if track fits on current disc
             fits = self._track_fits(
                 current_size=current_size,
@@ -160,7 +159,7 @@ class DiscPlanningEngine:
                 track_size=track_size,
                 track_duration=track_duration,
             )
-            
+
             if not fits and current_disc_tracks:
                 # Start a new disc
                 discs.append(DiscPlan(
@@ -172,19 +171,19 @@ class DiscPlanningEngine:
                 current_disc_tracks = []
                 current_size = 0
                 current_duration = 0
-            
+
             # Check if single track exceeds disc capacity
             if not self._track_fits(0, 0, track_size, track_duration):
                 raise PlanningError(
                     f"Track '{track.title}' exceeds disc capacity "
                     f"({self._format_capacity(track_size, track_duration)})"
                 )
-            
+
             # Add track to current disc
             current_disc_tracks.append(track.id)
             current_size += track_size
             current_duration += track_duration
-        
+
         # Add final disc
         if current_disc_tracks:
             discs.append(DiscPlan(
@@ -193,9 +192,9 @@ class DiscPlanningEngine:
                 total_size_bytes=current_size,
                 total_duration_seconds=current_duration,
             ))
-        
+
         return discs
-    
+
     def _track_fits(
         self,
         current_size: int,
@@ -218,7 +217,7 @@ class DiscPlanningEngine:
             return (current_size + track_size) <= self.disc_capacity_bytes
         else:
             return (current_duration + track_duration) <= self.disc_capacity_seconds
-    
+
     def _format_capacity(self, size_bytes: int, duration_seconds: int) -> str:
         """Format capacity for error messages."""
         if self.disc_type == DiscType.DATA:
@@ -228,7 +227,7 @@ class DiscPlanningEngine:
             minutes = duration_seconds // 60
             seconds = duration_seconds % 60
             return f"{minutes}:{seconds:02d}"
-    
+
     def estimate_discs(
         self,
         total_size_bytes: int | None = None,
@@ -250,7 +249,7 @@ class DiscPlanningEngine:
         elif self.disc_type == DiscType.AUDIO and total_duration_seconds:
             return max(1, (total_duration_seconds + self.disc_capacity_seconds - 1) // self.disc_capacity_seconds)
         return 1
-    
+
     def get_plan_summary(self, plan: BurnPlan) -> dict:
         """Get a summary of a burn plan.
         
@@ -263,7 +262,7 @@ class DiscPlanningEngine:
         total_tracks = sum(d.track_count for d in plan.discs)
         total_size = sum(d.total_size_bytes for d in plan.discs)
         total_duration = sum(d.total_duration_seconds for d in plan.discs)
-        
+
         summary = {
             "playlist_name": plan.playlist_name,
             "disc_type": plan.disc_type.value,
@@ -273,7 +272,7 @@ class DiscPlanningEngine:
             "total_duration_minutes": total_duration / 60,
             "discs": [],
         }
-        
+
         for disc in plan.discs:
             disc_info = {
                 "disc_number": disc.disc_number,
@@ -281,7 +280,7 @@ class DiscPlanningEngine:
                 "size_mb": disc.total_size_bytes / (1024 * 1024),
                 "duration_minutes": disc.total_duration_seconds / 60,
             }
-            
+
             # Add capacity usage percentage
             if plan.disc_type == DiscType.DATA and plan.disc_capacity_bytes:
                 disc_info["capacity_percent"] = (
@@ -291,9 +290,9 @@ class DiscPlanningEngine:
                 disc_info["capacity_percent"] = (
                     disc.total_duration_seconds / plan.disc_capacity_seconds * 100
                 )
-            
+
             summary["discs"].append(disc_info)
-        
+
         return summary
 
 

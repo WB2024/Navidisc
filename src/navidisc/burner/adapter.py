@@ -9,18 +9,17 @@ This module provides:
 
 import asyncio
 import shutil
-import subprocess
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import AsyncIterator, Callable
 
 from navidisc.models import BurnResult, BurnStatus, DiscType
 
 
 class BurnProgress:
     """Progress information for a burn operation."""
-    
+
     def __init__(
         self,
         disc_number: int,
@@ -54,19 +53,19 @@ class BurnerAdapter(ABC):
     - Progress reporting
     - Verification
     """
-    
+
     @property
     @abstractmethod
     def name(self) -> str:
         """Backend name."""
         pass
-    
+
     @property
     @abstractmethod
     def supported_disc_types(self) -> list[DiscType]:
         """Disc types supported by this backend."""
         pass
-    
+
     @abstractmethod
     async def check_device(self, device: str) -> tuple[bool, str]:
         """Check if a device is ready for burning.
@@ -78,7 +77,7 @@ class BurnerAdapter(ABC):
             Tuple of (ready, message).
         """
         pass
-    
+
     @abstractmethod
     async def burn(
         self,
@@ -99,7 +98,7 @@ class BurnerAdapter(ABC):
             BurnResult with burn status.
         """
         pass
-    
+
     @abstractmethod
     async def eject(self, device: str) -> bool:
         """Eject a disc.
@@ -111,7 +110,7 @@ class BurnerAdapter(ABC):
             True if ejected successfully.
         """
         pass
-    
+
     async def verify(
         self,
         device: str,
@@ -138,7 +137,7 @@ class GrowIsofsBackend(BurnerAdapter):
     This is the primary backend for data disc burning on Linux.
     Requires the dvd+rw-tools package.
     """
-    
+
     def __init__(self, speed: int | None = None):
         """Initialize growisofs backend.
         
@@ -146,25 +145,25 @@ class GrowIsofsBackend(BurnerAdapter):
             speed: Write speed (None for auto).
         """
         self.speed = speed
-    
+
     @property
     def name(self) -> str:
         return "growisofs"
-    
+
     @property
     def supported_disc_types(self) -> list[DiscType]:
         return [DiscType.DATA]
-    
+
     @classmethod
     def is_available(cls) -> bool:
         """Check if growisofs is installed."""
         return shutil.which("growisofs") is not None
-    
+
     async def check_device(self, device: str) -> tuple[bool, str]:
         """Check if device is ready for burning."""
         if not Path(device).exists():
             return False, f"Device {device} does not exist"
-        
+
         # Try to get device info using lsblk
         try:
             result = await asyncio.create_subprocess_exec(
@@ -173,20 +172,20 @@ class GrowIsofsBackend(BurnerAdapter):
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await result.communicate()
-            
+
             if result.returncode != 0:
                 return False, f"Cannot read device info: {stderr.decode().strip()}"
-            
+
             output = stdout.decode().strip()
             if "rom" not in output.lower():
                 return False, f"Device {device} does not appear to be an optical drive"
-            
+
             return True, "Device ready"
-            
+
         except FileNotFoundError:
             # lsblk not available, just check device exists
             return True, "Device exists (unable to verify type)"
-    
+
     async def burn(
         self,
         disc_path: Path,
@@ -196,14 +195,14 @@ class GrowIsofsBackend(BurnerAdapter):
     ) -> BurnResult:
         """Burn a data disc using growisofs."""
         started_at = datetime.now()
-        
+
         if progress_callback:
             progress_callback(BurnProgress(
                 disc_number=disc_number,
                 status="starting",
                 message="Preparing to burn...",
             ))
-        
+
         # Build growisofs command
         cmd = [
             "growisofs",
@@ -212,30 +211,30 @@ class GrowIsofsBackend(BurnerAdapter):
             "-R", "-J",  # Rock Ridge and Joliet extensions
             "-V", f"DISC_{disc_number:02d}",  # Volume label
         ]
-        
+
         if self.speed:
             cmd.extend(["-speed=%d" % self.speed])
-        
+
         cmd.append(str(disc_path))
-        
+
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            
+
             output_lines = []
-            
+
             # Read output and parse progress
             while True:
                 line = await process.stdout.readline()
                 if not line:
                     break
-                
+
                 line_text = line.decode().strip()
                 output_lines.append(line_text)
-                
+
                 # Parse progress from growisofs output
                 if progress_callback and "%" in line_text:
                     try:
@@ -252,12 +251,12 @@ class GrowIsofsBackend(BurnerAdapter):
                                 break
                     except ValueError:
                         pass
-            
+
             await process.wait()
-            
+
             completed_at = datetime.now()
             output_text = "\n".join(output_lines)
-            
+
             if process.returncode == 0:
                 if progress_callback:
                     progress_callback(BurnProgress(
@@ -266,7 +265,7 @@ class GrowIsofsBackend(BurnerAdapter):
                         percent=100,
                         message="Burn completed successfully",
                     ))
-                
+
                 return BurnResult(
                     disc_number=disc_number,
                     status=BurnStatus.SUCCESS,
@@ -285,7 +284,7 @@ class GrowIsofsBackend(BurnerAdapter):
                     error_message=f"growisofs exited with code {process.returncode}",
                     command_output=output_text,
                 )
-                
+
         except Exception as e:
             return BurnResult(
                 disc_number=disc_number,
@@ -295,7 +294,7 @@ class GrowIsofsBackend(BurnerAdapter):
                 completed_at=datetime.now(),
                 error_message=str(e),
             )
-    
+
     async def eject(self, device: str) -> bool:
         """Eject the disc."""
         try:
@@ -316,7 +315,7 @@ class DryRunBackend(BurnerAdapter):
     This backend simulates burning operations for testing
     and planning purposes.
     """
-    
+
     def __init__(self, simulate_duration: float = 2.0):
         """Initialize dry-run backend.
         
@@ -324,19 +323,19 @@ class DryRunBackend(BurnerAdapter):
             simulate_duration: Simulated burn duration in seconds.
         """
         self.simulate_duration = simulate_duration
-    
+
     @property
     def name(self) -> str:
         return "dry-run"
-    
+
     @property
     def supported_disc_types(self) -> list[DiscType]:
         return [DiscType.DATA, DiscType.AUDIO]
-    
+
     async def check_device(self, device: str) -> tuple[bool, str]:
         """Always returns ready in dry-run mode."""
         return True, f"[DRY-RUN] Device {device} ready (simulated)"
-    
+
     async def burn(
         self,
         disc_path: Path,
@@ -346,7 +345,7 @@ class DryRunBackend(BurnerAdapter):
     ) -> BurnResult:
         """Simulate a burn operation."""
         started_at = datetime.now()
-        
+
         # Verify disc path exists
         if not disc_path.exists():
             return BurnResult(
@@ -357,17 +356,17 @@ class DryRunBackend(BurnerAdapter):
                 completed_at=datetime.now(),
                 error_message=f"Disc path does not exist: {disc_path}",
             )
-        
+
         # Count files
         files = list(disc_path.iterdir()) if disc_path.is_dir() else []
-        
+
         if progress_callback:
             progress_callback(BurnProgress(
                 disc_number=disc_number,
                 status="starting",
                 message=f"[DRY-RUN] Would burn {len(files)} files to {device}",
             ))
-        
+
         # Simulate progress
         steps = 10
         for i in range(steps):
@@ -379,7 +378,7 @@ class DryRunBackend(BurnerAdapter):
                     message=f"[DRY-RUN] Simulating... {(i + 1) * 10}%",
                 ))
             await asyncio.sleep(self.simulate_duration / steps)
-        
+
         if progress_callback:
             progress_callback(BurnProgress(
                 disc_number=disc_number,
@@ -387,7 +386,7 @@ class DryRunBackend(BurnerAdapter):
                 percent=100,
                 message="[DRY-RUN] Burn simulation complete",
             ))
-        
+
         return BurnResult(
             disc_number=disc_number,
             status=BurnStatus.SUCCESS,
@@ -396,7 +395,7 @@ class DryRunBackend(BurnerAdapter):
             completed_at=datetime.now(),
             command_output=f"[DRY-RUN] Would have burned {len(files)} files to {device}",
         )
-    
+
     async def eject(self, device: str) -> bool:
         """Simulate eject."""
         return True
@@ -420,7 +419,7 @@ def detect_backend(
     """
     if dry_run:
         return DryRunBackend()
-    
+
     if disc_type == DiscType.DATA:
         if GrowIsofsBackend.is_available():
             return GrowIsofsBackend()
@@ -428,7 +427,7 @@ def detect_backend(
             "No data disc backend available. "
             "Please install dvd+rw-tools (growisofs)."
         )
-    
+
     # Audio disc - would need cdrecord/cdrdao
     raise BurnerError(
         f"No backend available for {disc_type.value} discs. "
@@ -443,8 +442,8 @@ def list_available_backends() -> list[str]:
         List of available backend names.
     """
     available = ["dry-run"]
-    
+
     if GrowIsofsBackend.is_available():
         available.append("growisofs")
-    
+
     return available

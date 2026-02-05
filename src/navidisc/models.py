@@ -6,13 +6,11 @@ These models are designed to be:
 - AI-friendly with clear, explicit fields
 """
 
-from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DiscType(str, Enum):
@@ -64,10 +62,10 @@ class Album(BaseModel):
     """Album information from Subsonic API."""
     id: str
     name: str
-    artist: Optional[str] = None
-    artist_id: Optional[str] = None
-    year: Optional[int] = None
-    genre: Optional[str] = None
+    artist: str | None = None
+    artist_id: str | None = None
+    year: int | None = None
+    genre: str | None = None
 
 
 class Track(BaseModel):
@@ -75,14 +73,14 @@ class Track(BaseModel):
     id: str
     title: str
     artist: str
-    album: Optional[str] = None
-    track_number: Optional[int] = None
+    album: str | None = None
+    track_number: int | None = None
     duration_seconds: int = Field(ge=0)
-    bitrate: Optional[int] = None  # kbps
-    size_bytes: Optional[int] = None
-    format: Optional[str] = None  # flac, mp3, etc.
-    path: Optional[str] = None  # Original path in library
-    stream_url: Optional[str] = None
+    bitrate: int | None = None  # kbps
+    size_bytes: int | None = None
+    format: str | None = None  # flac, mp3, etc.
+    path: str | None = None  # Original path in library
+    stream_url: str | None = None
 
     @property
     def display_name(self) -> str:
@@ -96,9 +94,9 @@ class Playlist(BaseModel):
     name: str
     track_count: int
     duration_seconds: int
-    created: Optional[datetime] = None
-    changed: Optional[datetime] = None
-    owner: Optional[str] = None
+    created: datetime | None = None
+    changed: datetime | None = None
+    owner: str | None = None
     public: bool = False
     tracks: list[Track] = Field(default_factory=list)
 
@@ -113,7 +111,7 @@ class DiscPlan(BaseModel):
     track_ids: list[str]
     total_size_bytes: int = 0
     total_duration_seconds: int = 0
-    
+
     @property
     def track_count(self) -> int:
         return len(self.track_ids)
@@ -124,8 +122,8 @@ class BurnPlan(BaseModel):
     playlist_id: str
     playlist_name: str
     disc_type: DiscType
-    disc_capacity_bytes: Optional[int] = None  # For data discs
-    disc_capacity_seconds: Optional[int] = None  # For audio discs
+    disc_capacity_bytes: int | None = None  # For data discs
+    disc_capacity_seconds: int | None = None  # For audio discs
     discs: list[DiscPlan] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
 
@@ -150,13 +148,12 @@ class StagedFile(BaseModel):
 
 class StagedDisc(BaseModel):
     """A disc directory ready for burning."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     disc_number: int
     directory: Path
     files: list[StagedFile] = Field(default_factory=list)
     total_size_bytes: int = 0
-
-    class Config:
-        arbitrary_types_allowed = True
 
 
 # =============================================================================
@@ -168,13 +165,13 @@ class BurnResult(BaseModel):
     disc_number: int
     status: BurnStatus
     device: str
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    command_output: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    command_output: str | None = None
 
     @property
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         if self.started_at and self.completed_at:
             return (self.completed_at - self.started_at).total_seconds()
         return None
@@ -189,7 +186,7 @@ class NavidiscError(BaseModel):
     stage: OrchestratorState
     error_type: str
     message: str
-    suggested_action: Optional[str] = None
+    suggested_action: str | None = None
     recoverable: bool = False
     context: dict = Field(default_factory=dict)
 
@@ -202,8 +199,8 @@ class SessionState(BaseModel):
     """Complete state of a burn session for persistence/recovery."""
     session_id: str
     state: OrchestratorState
-    playlist_id: Optional[str] = None
-    burn_plan: Optional[BurnPlan] = None
+    playlist_id: str | None = None
+    burn_plan: BurnPlan | None = None
     current_disc: int = 0
     burn_results: list[BurnResult] = Field(default_factory=list)
     errors: list[NavidiscError] = Field(default_factory=list)

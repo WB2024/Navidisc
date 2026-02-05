@@ -7,8 +7,8 @@ This module handles downloading track files with:
 """
 
 import hashlib
+from collections.abc import Callable
 from pathlib import Path
-from typing import AsyncIterator, Callable, Optional
 
 import httpx
 
@@ -17,7 +17,7 @@ from navidisc.media.resolver import ResolvedTrack, ResolveMethod
 
 class DownloadError(Exception):
     """Error during file download."""
-    
+
     def __init__(self, message: str, track_id: str | None = None):
         super().__init__(message)
         self.track_id = track_id
@@ -25,7 +25,7 @@ class DownloadError(Exception):
 
 class DownloadProgress:
     """Progress information for a download."""
-    
+
     def __init__(
         self,
         track_id: str,
@@ -37,14 +37,14 @@ class DownloadProgress:
         self.filename = filename
         self.total_bytes = total_bytes
         self.downloaded_bytes = downloaded_bytes
-    
+
     @property
     def percent(self) -> float | None:
         """Download progress as percentage, or None if size unknown."""
         if self.total_bytes and self.total_bytes > 0:
             return (self.downloaded_bytes / self.total_bytes) * 100
         return None
-    
+
     @property
     def is_complete(self) -> bool:
         """Whether download is complete."""
@@ -68,7 +68,7 @@ class Downloader:
         async for progress in downloader.download(resolved_track):
             print(f"Downloaded: {progress.percent:.1f}%")
     """
-    
+
     def __init__(
         self,
         download_dir: Path,
@@ -86,7 +86,7 @@ class Downloader:
         self.chunk_size = chunk_size
         self.timeout = timeout
         self._http_client: httpx.AsyncClient | None = None
-    
+
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._http_client is None:
@@ -95,7 +95,7 @@ class Downloader:
                 follow_redirects=True,
             )
         return self._http_client
-    
+
     async def download(
         self,
         resolved_track: ResolvedTrack,
@@ -118,16 +118,16 @@ class Downloader:
             raise ValueError(
                 f"Track does not need downloading: {resolved_track.track.id}"
             )
-        
+
         if not resolved_track.download_url:
             raise DownloadError(
                 "No download URL available",
                 resolved_track.track.id,
             )
-        
+
         # Ensure download directory exists
         self.download_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Generate filename
         track = resolved_track.track
         extension = track.format or "mp3"
@@ -135,33 +135,33 @@ class Downloader:
         safe_artist = self._sanitize_filename(track.artist)
         filename = f"{safe_artist} - {safe_title}.{extension}"
         output_path = self.download_dir / filename
-        
+
         # Download the file
         client = await self._get_client()
-        
+
         try:
             async with client.stream("GET", resolved_track.download_url) as response:
                 response.raise_for_status()
-                
+
                 # Get total size from headers if available
                 total_size = response.headers.get("content-length")
                 total_bytes = int(total_size) if total_size else resolved_track.size_bytes
-                
+
                 progress = DownloadProgress(
                     track_id=track.id,
                     filename=filename,
                     total_bytes=total_bytes,
                 )
-                
+
                 # Write to file
                 with open(output_path, "wb") as f:
                     async for chunk in response.aiter_bytes(self.chunk_size):
                         f.write(chunk)
                         progress.downloaded_bytes += len(chunk)
-                        
+
                         if progress_callback:
                             progress_callback(progress)
-        
+
         except httpx.HTTPStatusError as e:
             raise DownloadError(
                 f"HTTP error {e.response.status_code}: {e.response.reason_phrase}",
@@ -169,11 +169,11 @@ class Downloader:
             )
         except httpx.RequestError as e:
             raise DownloadError(f"Request failed: {e}", track.id)
-        except IOError as e:
+        except OSError as e:
             raise DownloadError(f"Failed to write file: {e}", track.id)
-        
+
         return output_path
-    
+
     async def download_many(
         self,
         resolved_tracks: list[ResolvedTrack],
@@ -189,16 +189,16 @@ class Downloader:
             Dictionary mapping track IDs to downloaded file paths.
         """
         results = {}
-        
+
         for rt in resolved_tracks:
             if rt.method == ResolveMethod.DOWNLOAD:
                 path = await self.download(rt, progress_callback)
                 results[rt.track.id] = path
             elif rt.method == ResolveMethod.LOCAL and rt.local_path:
                 results[rt.track.id] = rt.local_path
-        
+
         return results
-    
+
     def _sanitize_filename(self, name: str) -> str:
         """Sanitize a string for use in filenames.
         
@@ -213,22 +213,22 @@ class Downloader:
         result = name
         for char in invalid_chars:
             result = result.replace(char, "_")
-        
+
         # Collapse multiple underscores/spaces
         while "__" in result:
             result = result.replace("__", "_")
         while "  " in result:
             result = result.replace("  ", " ")
-        
+
         # Trim whitespace and underscores from ends
         result = result.strip(" _")
-        
+
         # Limit length
         if len(result) > 200:
             result = result[:200]
-        
+
         return result or "unknown"
-    
+
     async def verify_file(
         self,
         path: Path,
@@ -247,12 +247,12 @@ class Downloader:
         """
         if not path.exists():
             return False
-        
+
         actual_size = path.stat().st_size
-        
+
         if expected_size is not None and actual_size != expected_size:
             return False
-        
+
         if expected_hash is not None:
             md5 = hashlib.md5()
             with open(path, "rb") as f:
@@ -260,9 +260,9 @@ class Downloader:
                     md5.update(chunk)
             if md5.hexdigest() != expected_hash.lower():
                 return False
-        
+
         return True
-    
+
     async def close(self) -> None:
         """Close the HTTP client and clean up resources."""
         if self._http_client:

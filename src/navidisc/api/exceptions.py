@@ -3,7 +3,7 @@
 
 class SubsonicError(Exception):
     """Base exception for Subsonic API errors."""
-    
+
     def __init__(self, message: str, code: int | None = None):
         super().__init__(message)
         self.code = code
@@ -17,7 +17,7 @@ class AuthenticationError(SubsonicError):
 
 class PlaylistNotFoundError(SubsonicError):
     """Requested playlist was not found."""
-    
+
     def __init__(self, identifier: str):
         super().__init__(f"Playlist not found: {identifier}")
         self.identifier = identifier
@@ -30,7 +30,7 @@ class ConnectionError(SubsonicError):
 
 class APIError(SubsonicError):
     """Generic API error with error code from server."""
-    
+
     # Subsonic error codes
     ERROR_CODES = {
         0: "Generic error",
@@ -43,7 +43,7 @@ class APIError(SubsonicError):
         60: "Trial period is over",
         70: "Requested data was not found",
     }
-    
+
     def __init__(self, message: str, code: int):
         description = self.ERROR_CODES.get(code, "Unknown error")
         super().__init__(f"{message}: {description}", code)

@@ -5,8 +5,8 @@ Provides disc burning abstraction and backend implementations.
 
 from navidisc.burner.adapter import (
     BurnerAdapter,
-    GrowIsofsBackend,
     DryRunBackend,
+    GrowIsofsBackend,
     detect_backend,
 )
 

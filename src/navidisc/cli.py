@@ -7,7 +7,6 @@ import asyncio
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 
@@ -59,13 +58,13 @@ def load_config_with_fallback(config_path: Path | None) -> NavidiscConfig:
         click.ClickException: If config cannot be loaded.
     """
     path = config_path or get_default_config_path()
-    
+
     if not path.exists():
         raise click.ClickException(
             f"Configuration file not found: {path}\n"
             f"Run 'navidisc config init' to create one."
         )
-    
+
     try:
         return load_config(path)
     except Exception as e:
@@ -132,10 +131,10 @@ def burn_playlist(
     """
     if not name and not playlist_id:
         raise click.UsageError("Must provide playlist name or --id")
-    
+
     # Load configuration
     cfg = load_config_with_fallback(config)
-    
+
     # Apply overrides
     if disc_type:
         cfg.burning.disc_type = DiscType(disc_type)
@@ -145,14 +144,14 @@ def burn_playlist(
         cfg.burning.verify_after_burn = False
     if no_eject:
         cfg.burning.eject_after_burn = False
-    
+
     # Set up console
     console = Console(quiet=quiet)
     progress = ProgressDisplay(console)
-    
+
     if not quiet:
         console.banner()
-    
+
     # Run the workflow
     async def run():
         async with Orchestrator(cfg, dry_run=dry_run) as orchestrator:
@@ -163,40 +162,40 @@ def burn_playlist(
                     playlist_id=playlist_id,
                     event_handler=create_event_handler(console, progress),
                 )
-                
+
                 planner = DiscPlanningEngine(
                     disc_type=cfg.burning.disc_type,
                     disc_capacity_bytes=cfg.burning.disc_size_bytes,
                 )
                 summary = planner.get_plan_summary(plan)
-                
+
                 console.print_plan_summary(plan, summary)
-                
+
                 if output_plan:
                     output_plan.write_text(plan.model_dump_json(indent=2))
                     console.success(f"Plan saved to {output_plan}")
-                
+
                 if dry_run:
                     console.info("Dry run complete - no discs were burned")
                     return
-            
+
             # Confirm before burning
             if not force and not quiet:
                 if not console.confirm("Proceed with burning?"):
                     console.info("Cancelled")
                     return
-            
+
             # Full burn workflow
             progress.start("Starting...")
-            
+
             session = await orchestrator.run_playlist_burn(
                 playlist_name=name,
                 playlist_id=playlist_id,
                 event_handler=create_event_handler(console, progress),
             )
-            
+
             console.print_final_summary(session.burn_results)
-    
+
     try:
         asyncio.run(run())
     except KeyboardInterrupt:
@@ -273,10 +272,11 @@ def list_playlists(config: Path | None, verbose: bool, quiet: bool):
     """List available playlists from Navidrome."""
     cfg = load_config_with_fallback(config)
     console = Console(quiet=quiet)
-    
-    from navidisc.api import SubsonicClient
+
     from rich.table import Table
-    
+
+    from navidisc.api import SubsonicClient
+
     async def run():
         async with SubsonicClient(
             base_url=cfg.navidrome.url,
@@ -284,30 +284,30 @@ def list_playlists(config: Path | None, verbose: bool, quiet: bool):
             password=cfg.navidrome.password,
         ) as client:
             playlists = await client.get_playlists()
-            
+
             if not playlists:
                 console.info("No playlists found")
                 return
-            
+
             table = Table(title="Playlists", show_header=True)
             table.add_column("ID", style="dim")
             table.add_column("Name")
             table.add_column("Tracks", justify="right")
             table.add_column("Duration", justify="right")
-            
+
             for p in playlists:
                 duration_min = p.duration_seconds / 60
                 duration_str = f"{int(duration_min)}:{int((duration_min % 1) * 60):02d}"
-                
+
                 table.add_row(
                     p.id,
                     p.name,
                     str(p.track_count),
                     duration_str,
                 )
-            
+
             console.console.print(table)
-    
+
     try:
         asyncio.run(run())
     except Exception as e:
@@ -337,16 +337,16 @@ def config():
 def config_init(path: Path | None, force: bool):
     """Create an example configuration file."""
     config_path = path or get_default_config_path()
-    
+
     if config_path.exists() and not force:
         raise click.ClickException(
             f"Configuration file already exists: {config_path}\n"
             f"Use --force to overwrite."
         )
-    
+
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(create_example_config())
-    
+
     click.echo(f"Created configuration file: {config_path}")
     click.echo("Edit this file with your Navidrome settings.")
 
@@ -356,12 +356,12 @@ def config_init(path: Path | None, force: bool):
 def config_show(config: Path | None):
     """Show current configuration."""
     cfg = load_config_with_fallback(config)
-    
+
     # Mask password
     output = cfg.model_dump()
     if "navidrome" in output and "password" in output["navidrome"]:
         output["navidrome"]["password"] = "****"
-    
+
     click.echo(json.dumps(output, indent=2, default=str))
 
 

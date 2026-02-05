@@ -10,7 +10,6 @@ This client handles:
 import hashlib
 import secrets
 from typing import Any
-from urllib.parse import urljoin
 
 import httpx
 
@@ -21,7 +20,7 @@ from navidisc.api.exceptions import (
     PlaylistNotFoundError,
     SubsonicError,
 )
-from navidisc.models import Album, Artist, Playlist, Track
+from navidisc.models import Playlist, Track
 
 
 class SubsonicClient:
@@ -39,7 +38,7 @@ class SubsonicClient:
         await client.authenticate()
         playlists = await client.get_playlists()
     """
-    
+
     def __init__(
         self,
         base_url: str,
@@ -64,12 +63,12 @@ class SubsonicClient:
         self.client_name = client_name
         self._authenticated = False
         self._http_client: httpx.AsyncClient | None = None
-    
+
     @property
     def is_authenticated(self) -> bool:
         """Whether the client has successfully authenticated."""
         return self._authenticated
-    
+
     def _generate_auth_params(self) -> dict[str, str]:
         """Generate authentication parameters using token method.
         
@@ -78,7 +77,7 @@ class SubsonicClient:
         """
         salt = secrets.token_hex(8)
         token = hashlib.md5((self.password + salt).encode()).hexdigest()
-        
+
         return {
             "u": self.username,
             "t": token,
@@ -87,13 +86,13 @@ class SubsonicClient:
             "c": self.client_name,
             "f": "json",
         }
-    
+
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client."""
         if self._http_client is None:
             self._http_client = httpx.AsyncClient(timeout=30.0)
         return self._http_client
-    
+
     async def _request(
         self,
         endpoint: str,
@@ -114,11 +113,11 @@ class SubsonicClient:
             APIError: If the API returns an error
         """
         url = f"{self.base_url}/rest/{endpoint}"
-        
+
         request_params = self._generate_auth_params()
         if params:
             request_params.update(params)
-        
+
         try:
             client = await self._get_client()
             response = await client.get(url, params=request_params)
@@ -127,26 +126,26 @@ class SubsonicClient:
             raise ConnectionError(f"Could not connect to {self.base_url}: {e}")
         except httpx.HTTPStatusError as e:
             raise SubsonicError(f"HTTP error: {e.response.status_code}")
-        
+
         try:
             data = response.json()
         except ValueError:
             raise SubsonicError("Invalid JSON response from server")
-        
+
         # Subsonic wraps responses in "subsonic-response"
         subsonic_response = data.get("subsonic-response", {})
-        
+
         if subsonic_response.get("status") == "failed":
             error = subsonic_response.get("error", {})
             code = error.get("code", 0)
             message = error.get("message", "Unknown error")
-            
+
             if code == 40:
                 raise AuthenticationError(message, code)
             raise APIError(message, code)
-        
+
         return subsonic_response
-    
+
     async def authenticate(self) -> bool:
         """Test authentication with the server.
         
@@ -161,7 +160,7 @@ class SubsonicClient:
         await self._request("ping")
         self._authenticated = True
         return True
-    
+
     async def get_playlists(self) -> list[Playlist]:
         """Get all playlists accessible to the user.
         
@@ -170,11 +169,11 @@ class SubsonicClient:
         """
         response = await self._request("getPlaylists")
         playlists_data = response.get("playlists", {}).get("playlist", [])
-        
+
         # Handle single playlist (not returned as list)
         if isinstance(playlists_data, dict):
             playlists_data = [playlists_data]
-        
+
         playlists = []
         for p in playlists_data:
             playlists.append(Playlist(
@@ -185,9 +184,9 @@ class SubsonicClient:
                 owner=p.get("owner"),
                 public=p.get("public", False),
             ))
-        
+
         return playlists
-    
+
     async def get_playlist(self, playlist_id: str) -> Playlist:
         """Get a playlist with full track details.
         
@@ -206,16 +205,16 @@ class SubsonicClient:
             if e.code == 70:  # Data not found
                 raise PlaylistNotFoundError(playlist_id)
             raise
-        
+
         playlist_data = response.get("playlist", {})
         tracks_data = playlist_data.get("entry", [])
-        
+
         # Handle single track (not returned as list)
         if isinstance(tracks_data, dict):
             tracks_data = [tracks_data]
-        
+
         tracks = [self._parse_track(t) for t in tracks_data]
-        
+
         return Playlist(
             id=str(playlist_data.get("id")),
             name=playlist_data.get("name", ""),
@@ -225,7 +224,7 @@ class SubsonicClient:
             public=playlist_data.get("public", False),
             tracks=tracks,
         )
-    
+
     async def get_playlist_by_name(self, name: str) -> Playlist:
         """Get a playlist by name with full track details.
         
@@ -239,14 +238,14 @@ class SubsonicClient:
             PlaylistNotFoundError: If no playlist with that name exists.
         """
         playlists = await self.get_playlists()
-        
+
         # Find playlist by name (case-insensitive)
         for playlist in playlists:
             if playlist.name.lower() == name.lower():
                 return await self.get_playlist(playlist.id)
-        
+
         raise PlaylistNotFoundError(name)
-    
+
     def _parse_track(self, data: dict[str, Any]) -> Track:
         """Parse track data from API response.
         
@@ -269,7 +268,7 @@ class SubsonicClient:
             path=data.get("path"),
             stream_url=self._build_stream_url(str(data.get("id"))),
         )
-    
+
     def _build_stream_url(self, track_id: str) -> str:
         """Build a stream/download URL for a track.
         
@@ -281,10 +280,10 @@ class SubsonicClient:
         """
         params = self._generate_auth_params()
         params["id"] = track_id
-        
+
         query = "&".join(f"{k}={v}" for k, v in params.items())
         return f"{self.base_url}/rest/download?{query}"
-    
+
     def get_download_url(self, track_id: str) -> str:
         """Get a download URL for a track.
         
@@ -297,19 +296,19 @@ class SubsonicClient:
             Full URL for downloading the track.
         """
         return self._build_stream_url(track_id)
-    
+
     async def close(self) -> None:
         """Close the HTTP client and clean up resources."""
         if self._http_client:
             await self._http_client.aclose()
             self._http_client = None
         self._authenticated = False
-    
+
     async def __aenter__(self) -> "SubsonicClient":
         """Async context manager entry."""
         await self.authenticate()
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit."""
         await self.close()

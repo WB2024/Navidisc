@@ -3,8 +3,8 @@
 Provides track resolution and downloading functionality.
 """
 
-from navidisc.media.resolver import MediaResolver, ResolvedTrack
 from navidisc.media.downloader import Downloader
+from navidisc.media.resolver import MediaResolver, ResolvedTrack
 
 __all__ = [
     "MediaResolver",

@@ -4,7 +4,7 @@ Provides rich console output using the Rich library.
 This module contains NO business logic - only presentation.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from rich.console import Console as RichConsole
 from rich.panel import Panel
@@ -21,7 +21,6 @@ from rich.theme import Theme
 
 from navidisc.core import OrchestratorEvent
 from navidisc.models import BurnPlan, BurnResult, BurnStatus
-
 
 # Custom theme for Navidisc
 NAVIDISC_THEME = Theme({
@@ -40,7 +39,7 @@ class Console:
     Provides formatted output for the burn workflow.
     Contains no business logic - pure presentation.
     """
-    
+
     def __init__(self, quiet: bool = False):
         """Initialize the console.
         
@@ -49,12 +48,12 @@ class Console:
         """
         self.console = RichConsole(theme=NAVIDISC_THEME)
         self.quiet = quiet
-    
+
     def banner(self) -> None:
         """Display the Navidisc banner."""
         if self.quiet:
             return
-        
+
         self.console.print()
         self.console.print(
             Panel.fit(
@@ -63,24 +62,24 @@ class Console:
             )
         )
         self.console.print()
-    
+
     def info(self, message: str) -> None:
         """Display an info message."""
         if not self.quiet:
             self.console.print(f"[info]ℹ[/] {message}")
-    
+
     def success(self, message: str) -> None:
         """Display a success message."""
         self.console.print(f"[success]✓[/] {message}")
-    
+
     def warning(self, message: str) -> None:
         """Display a warning message."""
         self.console.print(f"[warning]⚠[/] {message}")
-    
+
     def error(self, message: str) -> None:
         """Display an error message."""
         self.console.print(f"[error]✗[/] {message}")
-    
+
     def print_playlist_info(self, name: str, track_count: int, duration_minutes: float) -> None:
         """Display playlist information."""
         self.console.print()
@@ -88,7 +87,7 @@ class Console:
         self.console.print(f"  Tracks: {track_count}")
         self.console.print(f"  Duration: {duration_minutes:.1f} minutes")
         self.console.print()
-    
+
     def print_plan_summary(self, plan: BurnPlan, plan_summary: dict) -> None:
         """Display a burn plan summary."""
         self.console.print()
@@ -99,7 +98,7 @@ class Console:
             title="Burn Plan",
             border_style="cyan",
         ))
-        
+
         # Disc details table
         table = Table(title="Disc Breakdown", show_header=True)
         table.add_column("Disc", style="disc")
@@ -107,12 +106,12 @@ class Console:
         table.add_column("Size (MB)", justify="right")
         table.add_column("Duration", justify="right")
         table.add_column("Usage", justify="right")
-        
+
         for disc_info in plan_summary.get("discs", []):
             duration_min = disc_info["duration_minutes"]
             duration_str = f"{int(duration_min)}:{int((duration_min % 1) * 60):02d}"
             usage = disc_info.get("capacity_percent", 0)
-            
+
             table.add_row(
                 f"Disc {disc_info['disc_number']}",
                 str(disc_info["tracks"]),
@@ -120,10 +119,10 @@ class Console:
                 duration_str,
                 f"{usage:.1f}%",
             )
-        
+
         self.console.print(table)
         self.console.print()
-    
+
     def print_disc_prompt(self, disc_number: int, total_discs: int, device: str) -> None:
         """Prompt user to insert a disc."""
         self.console.print()
@@ -134,7 +133,7 @@ class Console:
             title="Disc Required",
             border_style="magenta",
         ))
-    
+
     def print_burn_result(self, result: BurnResult) -> None:
         """Display a burn result."""
         if result.status == BurnStatus.SUCCESS:
@@ -148,14 +147,14 @@ class Console:
             )
         elif result.status == BurnStatus.SKIPPED:
             self.warning(f"Disc {result.disc_number} skipped")
-    
+
     def print_final_summary(self, results: list[BurnResult]) -> None:
         """Display final burn summary."""
         self.console.print()
-        
+
         success_count = sum(1 for r in results if r.status == BurnStatus.SUCCESS)
         failed_count = sum(1 for r in results if r.status == BurnStatus.FAILED)
-        
+
         if failed_count == 0:
             self.console.print(Panel(
                 f"[success]All {success_count} disc(s) burned successfully![/]",
@@ -169,9 +168,9 @@ class Console:
                 title="Complete",
                 border_style="yellow",
             ))
-        
+
         self.console.print()
-    
+
     def confirm(self, message: str, default: bool = False) -> bool:
         """Ask for user confirmation.
         
@@ -184,11 +183,11 @@ class Console:
         """
         suffix = "[Y/n]" if default else "[y/N]"
         response = self.console.input(f"{message} {suffix} ").strip().lower()
-        
+
         if not response:
             return default
         return response in ("y", "yes")
-    
+
     def wait_for_enter(self) -> None:
         """Wait for user to press Enter."""
         self.console.input()
@@ -199,7 +198,7 @@ class ProgressDisplay:
     
     Provides visual feedback during long-running operations.
     """
-    
+
     def __init__(self, console: Console):
         """Initialize progress display.
         
@@ -209,7 +208,7 @@ class ProgressDisplay:
         self.console = console
         self._progress: Progress | None = None
         self._task_id: int | None = None
-    
+
     def start(self, description: str = "Working...") -> None:
         """Start the progress display."""
         self._progress = Progress(
@@ -222,7 +221,7 @@ class ProgressDisplay:
         )
         self._progress.start()
         self._task_id = self._progress.add_task(description, total=100)
-    
+
     def update(self, description: str | None = None, completed: float | None = None) -> None:
         """Update progress.
         
@@ -237,7 +236,7 @@ class ProgressDisplay:
             if completed is not None:
                 kwargs["completed"] = completed
             self._progress.update(self._task_id, **kwargs)
-    
+
     def stop(self) -> None:
         """Stop the progress display."""
         if self._progress:
@@ -260,17 +259,17 @@ def create_event_handler(console: Console, progress: ProgressDisplay) -> callabl
         if event == OrchestratorEvent.STATE_CHANGED:
             # State changes are logged at debug level
             pass
-        
+
         elif event == OrchestratorEvent.PROGRESS:
             step = data.get("step", "")
             message = data.get("message", "")
             percent = data.get("percent")
-            
+
             if percent is not None:
                 progress.update(description=message, completed=percent)
             else:
                 console.info(message)
-        
+
         elif event == OrchestratorEvent.DISC_REQUIRED:
             progress.stop()
             console.print_disc_prompt(
@@ -280,29 +279,29 @@ def create_event_handler(console: Console, progress: ProgressDisplay) -> callabl
             )
             console.wait_for_enter()
             progress.start(f"Burning disc {data['disc_number']}...")
-        
+
         elif event == OrchestratorEvent.BURN_STARTED:
             progress.update(
                 description=f"Burning disc {data['disc_number']}/{data['total_discs']}...",
                 completed=0,
             )
-        
+
         elif event == OrchestratorEvent.BURN_PROGRESS:
             percent = data.get("percent", 0)
             message = data.get("message", "Burning...")
             progress.update(description=message, completed=percent)
-        
+
         elif event == OrchestratorEvent.BURN_COMPLETED:
             progress.stop()
             from navidisc.models import BurnResult
             result = BurnResult.model_validate(data["result"])
             console.print_burn_result(result)
-        
+
         elif event == OrchestratorEvent.ERROR:
             progress.stop()
             console.error(data.get("message", "Unknown error"))
-        
+
         elif event == OrchestratorEvent.COMPLETE:
             progress.stop()
-    
+
     return handle_event
