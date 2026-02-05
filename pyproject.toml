@@ -10,7 +10,10 @@ readme = "README.md"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.11"
 authors = [
-    { name = "Navidisc Contributors" }
+    { name = "Will Bates", email = "willb@users.noreply.github.com" }
+]
+maintainers = [
+    { name = "Will Bates" }
 ]
 keywords = ["navidrome", "subsonic", "cd", "burning", "playlist"]
 classifiers = [

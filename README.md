@@ -2,6 +2,8 @@
 
 **Convert Navidrome playlists to physical CDs with ease.**
 
+© 2026 Will Bates. All rights reserved.
+
 Navidisc is a Linux-based automation tool that takes your Navidrome (Subsonic) playlists and burns them to one or more physical CDs. It handles playlist resolution, file staging, disc capacity planning, and multi-disc workflows automatically.
 
 ## Features
