@@ -374,6 +374,275 @@ class GrowIsofsBackend(BurnerAdapter):
             return False
 
 
+class WodimBackend(BurnerAdapter):
+    """Burner backend using wodim/cdrecord for data CDs.
+
+    This backend is specifically for burning CDs (not DVDs).
+    Requires wodim or cdrecord to be installed.
+    """
+
+    def __init__(
+        self,
+        media_type: MediaType = MediaType.AUTO,
+        write_speed: WriteSpeed = WriteSpeed.AUTO,
+        custom_speed: int | None = None,
+    ):
+        """Initialize wodim backend.
+
+        Args:
+            media_type: Type of media being used.
+            write_speed: Speed preset.
+            custom_speed: Custom speed value (when write_speed=CUSTOM).
+        """
+        self.media_type = media_type
+        self.write_speed_preset = write_speed
+        self.custom_speed = custom_speed
+        self._drive_info: DriveInfo | None = None
+        self._speed_recommendation: SpeedRecommendation | None = None
+
+    @property
+    def name(self) -> str:
+        return "wodim"
+
+    @property
+    def supported_disc_types(self) -> list[DiscType]:
+        return [DiscType.DATA]
+
+    @staticmethod
+    def is_available() -> bool:
+        """Check if wodim or cdrecord is available."""
+        return shutil.which("wodim") is not None or shutil.which("cdrecord") is not None
+
+    @staticmethod
+    def _get_command() -> str:
+        """Get the available command (wodim or cdrecord)."""
+        if shutil.which("wodim"):
+            return "wodim"
+        elif shutil.which("cdrecord"):
+            return "cdrecord"
+        raise BurnerError("Neither wodim nor cdrecord is available")
+
+    async def check_device(self, device: str) -> tuple[bool, str]:
+        """Check if device is ready and detect capabilities."""
+        try:
+            # Detect drive info
+            self._drive_info = await detect_drive_info(device)
+
+            # Calculate speed recommendation
+            self._speed_recommendation = calculate_write_speed(
+                write_speed_preset=self.write_speed_preset,
+                media_type=self.media_type,
+                drive_info=self._drive_info,
+                custom_speed=self.custom_speed,
+            )
+
+            # Build status message with drive info
+            status_parts = ["Device ready"]
+            if self._drive_info:
+                status_parts.append(f"Drive: {self._drive_info.vendor} {self._drive_info.model}")
+            if self._speed_recommendation:
+                status_parts.append(f"Speed: {self._speed_recommendation.reason}")
+
+            return True, " | ".join(status_parts)
+
+        except Exception as e:
+            return False, f"Device check failed: {e}"
+
+    async def burn(
+        self,
+        disc_path: Path,
+        device: str,
+        disc_number: int = 1,
+        progress_callback: ProgressCallback | None = None,
+    ) -> BurnResult:
+        """Burn a data CD using wodim/cdrecord."""
+        started_at = datetime.now()
+
+        # Ensure we have speed recommendation
+        if not self._speed_recommendation:
+            self._speed_recommendation = calculate_write_speed(
+                write_speed_preset=self.write_speed_preset,
+                media_type=self.media_type,
+                drive_info=self._drive_info,
+                custom_speed=self.custom_speed,
+            )
+
+        if progress_callback:
+            progress_callback(BurnProgress(
+                disc_number=disc_number,
+                status="starting",
+                message="Preparing to burn CD...",
+            ))
+
+        # Get command
+        cmd_name = self._get_command()
+
+        # Build command - use genisoimage to create ISO on the fly
+        # First, create ISO image
+        iso_path = disc_path.parent / f"disc_{disc_number:02d}.iso"
+
+        try:
+            # Create ISO using genisoimage or mkisofs
+            iso_cmd = []
+            if shutil.which("genisoimage"):
+                iso_cmd = ["genisoimage"]
+            elif shutil.which("mkisofs"):
+                iso_cmd = ["mkisofs"]
+            else:
+                raise BurnerError("Neither genisoimage nor mkisofs is available")
+
+            iso_cmd.extend([
+                "-R", "-J",  # Rock Ridge and Joliet
+                "-V", f"DISC_{disc_number:02d}",  # Volume label
+                "-o", str(iso_path),
+                str(disc_path),
+            ])
+
+            logger.info(f"Creating ISO: {' '.join(iso_cmd)}")
+
+            # Create ISO
+            iso_process = await asyncio.create_subprocess_exec(
+                *iso_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            iso_stdout, iso_stderr = await iso_process.communicate()
+
+            if iso_process.returncode != 0:
+                return BurnResult(
+                    disc_number=disc_number,
+                    status=BurnStatus.FAILED,
+                    device=device,
+                    started_at=started_at,
+                    completed_at=datetime.now(),
+                    error_message=f"ISO creation failed: {iso_stderr.decode()}",
+                )
+
+            # Build wodim/cdrecord command
+            burn_cmd = [cmd_name]
+
+            # Add speed if we have a recommendation
+            if self._speed_recommendation and self._speed_recommendation.speed_x > 0:
+                burn_cmd.append(f"speed={self._speed_recommendation.speed_x}")
+
+            burn_cmd.extend([
+                "-v",  # Verbose
+                "dev=" + device,  # Device
+                "-data",  # Data CD mode
+                str(iso_path),  # ISO file to burn
+            ])
+
+            logger.info(f"Executing: {' '.join(burn_cmd)}")
+
+            # Execute burn
+            burn_process = await asyncio.create_subprocess_exec(
+                *burn_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+
+            output_lines = []
+
+            # Read output
+            while True:
+                line = await burn_process.stdout.readline()
+                if not line:
+                    break
+
+                line_text = line.decode().strip()
+                output_lines.append(line_text)
+
+                # Parse progress from wodim output
+                if progress_callback and "%" in line_text:
+                    try:
+                        # wodim outputs progress like "12% done"
+                        for part in line_text.split():
+                            if "%" in part:
+                                percent = float(part.replace("%", ""))
+                                progress_callback(BurnProgress(
+                                    disc_number=disc_number,
+                                    status="burning",
+                                    percent=percent,
+                                    message=line_text,
+                                ))
+                                break
+                    except ValueError:
+                        pass
+
+            await burn_process.wait()
+
+            completed_at = datetime.now()
+            output_text = "\n".join(output_lines)
+
+            # Clean up ISO file
+            try:
+                iso_path.unlink()
+            except Exception:
+                pass
+
+            logger.debug(f"{cmd_name} exited with code {burn_process.returncode}")
+            if output_text:
+                logger.debug(f"{cmd_name} output:\n{output_text}")
+
+            if burn_process.returncode == 0:
+                if progress_callback:
+                    progress_callback(BurnProgress(
+                        disc_number=disc_number,
+                        status="complete",
+                        percent=100,
+                        message="Burn completed successfully",
+                    ))
+
+                return BurnResult(
+                    disc_number=disc_number,
+                    status=BurnStatus.SUCCESS,
+                    device=device,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    command_output=output_text,
+                )
+            else:
+                return BurnResult(
+                    disc_number=disc_number,
+                    status=BurnStatus.FAILED,
+                    device=device,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    error_message=f"{cmd_name} exited with code {burn_process.returncode}",
+                    command_output=output_text,
+                )
+
+        except Exception as e:
+            # Clean up ISO if it exists
+            try:
+                if iso_path.exists():
+                    iso_path.unlink()
+            except Exception:
+                pass
+
+            return BurnResult(
+                disc_number=disc_number,
+                status=BurnStatus.FAILED,
+                device=device,
+                started_at=started_at,
+                completed_at=datetime.now(),
+                error_message=str(e),
+            )
+
+    async def eject(self, device: str) -> bool:
+        """Eject the disc."""
+        try:
+            result = await asyncio.create_subprocess_exec(
+                "eject", device,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await result.communicate()
+            return result.returncode == 0
+        except Exception:
+            return False
+
+
 class DryRunBackend(BurnerAdapter):
     """Dry-run backend for testing without burning.
 
@@ -466,6 +735,21 @@ class DryRunBackend(BurnerAdapter):
         return True
 
 
+def _is_cd_media(media_type: MediaType) -> bool:
+    """Check if media type is CD."""
+    return media_type.value.startswith("cd-")
+
+
+def _is_dvd_media(media_type: MediaType) -> bool:
+    """Check if media type is DVD."""
+    return media_type.value.startswith("dvd-")
+
+
+def _is_bd_media(media_type: MediaType) -> bool:
+    """Check if media type is Blu-ray."""
+    return media_type.value.startswith("bd-")
+
+
 def detect_backend(
     disc_type: DiscType = DiscType.DATA,
     media_type: MediaType = MediaType.AUTO,
@@ -492,16 +776,32 @@ def detect_backend(
         return DryRunBackend()
 
     if disc_type == DiscType.DATA:
-        if GrowIsofsBackend.is_available():
-            return GrowIsofsBackend(
-                media_type=media_type,
-                write_speed=write_speed,
-                custom_speed=custom_speed,
+        # Choose backend based on media type
+        # CD media uses wodim/cdrecord, DVD/BD media uses growisofs
+        if _is_cd_media(media_type):
+            # Use wodim for CDs
+            if WodimBackend.is_available():
+                return WodimBackend(
+                    media_type=media_type,
+                    write_speed=write_speed,
+                    custom_speed=custom_speed,
+                )
+            raise BurnerError(
+                "No CD burning backend available. "
+                "Please install wodim or cdrecord."
             )
-        raise BurnerError(
-            "No data disc backend available. "
-            "Please install dvd+rw-tools (growisofs)."
-        )
+        else:
+            # Use growisofs for DVDs, Blu-rays, and AUTO
+            if GrowIsofsBackend.is_available():
+                return GrowIsofsBackend(
+                    media_type=media_type,
+                    write_speed=write_speed,
+                    custom_speed=custom_speed,
+                )
+            raise BurnerError(
+                "No DVD/BD burning backend available. "
+                "Please install dvd+rw-tools (growisofs)."
+            )
 
     # Audio disc - would need cdrecord/cdrdao
     raise BurnerError(
@@ -517,6 +817,9 @@ def list_available_backends() -> list[str]:
         List of available backend names.
     """
     available = ["dry-run"]
+
+    if WodimBackend.is_available():
+        available.append("wodim")
 
     if GrowIsofsBackend.is_available():
         available.append("growisofs")

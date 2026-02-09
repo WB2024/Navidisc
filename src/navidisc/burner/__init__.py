@@ -7,6 +7,7 @@ from navidisc.burner.adapter import (
     BurnerAdapter,
     DryRunBackend,
     GrowIsofsBackend,
+    WodimBackend,
     detect_backend,
 )
 from navidisc.burner.drive import (
@@ -23,6 +24,7 @@ from navidisc.burner.drive import (
 __all__ = [
     "BurnerAdapter",
     "GrowIsofsBackend",
+    "WodimBackend",
     "DryRunBackend",
     "detect_backend",
     "DriveInfo",
