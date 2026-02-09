@@ -458,7 +458,7 @@ class Orchestrator:
         plan = self.session.burn_plan
         disc_plan = plan.discs[disc_number - 1]
         
-        logger.info(f"Staging disc {disc_number}/{plan.total_discs} ({len(disc_plan.tracks)} tracks)")
+        logger.info(f"Staging disc {disc_number}/{plan.total_discs} ({disc_plan.track_count} tracks)")
 
         self._set_state(OrchestratorState.STAGING_DISC)
         self.session.current_disc = disc_number
