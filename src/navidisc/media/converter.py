@@ -80,6 +80,37 @@ def get_quality_description(quality: ConversionQuality) -> str:
     return preset["description"] if preset else "Unknown"
 
 
+def estimate_mp3_size(duration_seconds: int, quality: ConversionQuality) -> int:
+    """Estimate the MP3 file size after conversion.
+
+    Uses the target CBR bitrate to calculate expected size.
+    Adds ~2% overhead for MP3 framing, ID3 tags, etc.
+
+    Args:
+        duration_seconds: Track duration in seconds.
+        quality: Quality preset to estimate for.
+
+    Returns:
+        Estimated file size in bytes.
+    """
+    if quality == ConversionQuality.DISABLED:
+        return 0
+
+    preset = QUALITY_PRESETS.get(quality)
+    if not preset:
+        return 0
+
+    # Parse bitrate string like "320k" -> 320000
+    bitrate_str = preset["bitrate"]
+    bitrate_bps = int(bitrate_str.replace("k", "")) * 1000
+
+    # Size = (bitrate in bits/sec * duration in sec) / 8 bits per byte
+    raw_size = (bitrate_bps * duration_seconds) // 8
+
+    # Add ~2% overhead for MP3 framing and ID3 tags
+    return int(raw_size * 1.02)
+
+
 def check_ffmpeg_available() -> bool:
     """Check if ffmpeg is available on the system."""
     return shutil.which("ffmpeg") is not None

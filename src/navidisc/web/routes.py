@@ -17,6 +17,7 @@ from navidisc.config import (
     save_config,
 )
 from navidisc.core import Orchestrator, OrchestratorEvent
+from navidisc.media.converter import estimate_mp3_size
 from navidisc.models import ConversionQuality, DiscType, MediaType, WriteSpeed
 from navidisc.planner import DiscPlanningEngine
 
@@ -211,7 +212,14 @@ async def get_playlist_details(request: Request, playlist_id: str):
             )
 
             # Build size lookup from track data
-            size_lookup = {t.id: t.size_bytes for t in playlist.tracks if t.size_bytes}
+            # If conversion is enabled, estimate post-conversion MP3 sizes
+            quality = config.media.conversion_quality
+            size_lookup = {}
+            for t in playlist.tracks:
+                if quality != ConversionQuality.DISABLED and t.duration_seconds and t.format and t.format.lower() != "mp3":
+                    size_lookup[t.id] = estimate_mp3_size(t.duration_seconds, quality)
+                elif t.size_bytes:
+                    size_lookup[t.id] = t.size_bytes
 
             try:
                 plan = planner.plan(playlist, size_lookup)
@@ -518,7 +526,14 @@ async def get_burn_plan(request: Request, playlist_id: str):
             disc_capacity_seconds=config.burning.audio_disc_seconds,
         )
 
-        size_lookup = {t.id: t.size_bytes for t in playlist.tracks if t.size_bytes}
+        # Build size lookup - estimate post-conversion sizes if conversion enabled
+        quality = config.media.conversion_quality
+        size_lookup = {}
+        for t in playlist.tracks:
+            if quality != ConversionQuality.DISABLED and t.duration_seconds and t.format and t.format.lower() != "mp3":
+                size_lookup[t.id] = estimate_mp3_size(t.duration_seconds, quality)
+            elif t.size_bytes:
+                size_lookup[t.id] = t.size_bytes
         plan = planner.plan(playlist, size_lookup)
         plan_summary = planner.get_plan_summary(plan)
 
