@@ -9,11 +9,14 @@ This module provides:
 """
 
 import asyncio
+import logging
 import shutil
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from navidisc.burner.drive import (
     DriveInfo,
@@ -272,6 +275,8 @@ class GrowIsofsBackend(BurnerAdapter):
             cmd.extend(["-speed=%d" % self._speed_recommendation.speed_x])
 
         cmd.append(str(disc_path))
+        
+        logger.info(f"Executing: {' '.join(cmd)}")
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -312,6 +317,10 @@ class GrowIsofsBackend(BurnerAdapter):
 
             completed_at = datetime.now()
             output_text = "\n".join(output_lines)
+            
+            logger.debug(f"growisofs exited with code {process.returncode}")
+            if output_text:
+                logger.debug(f"growisofs output:\n{output_text}")
 
             if process.returncode == 0:
                 if progress_callback:

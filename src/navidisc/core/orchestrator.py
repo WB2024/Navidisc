@@ -540,6 +540,8 @@ class Orchestrator:
         logger.info(f"Burn completed: disc {disc_number}, status={result.status}")
         if result.error_message:
             logger.error(f"Burn error: {result.error_message}")
+            if result.command_output:
+                logger.error(f"Command output:\n{result.command_output}")
 
         # Verify if enabled
         if self.config.burning.verify_after_burn and result.status == BurnStatus.SUCCESS:
