@@ -5,6 +5,7 @@ Provides the command-line interface for Navidisc.
 
 import asyncio
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -22,6 +23,35 @@ from navidisc.models import DiscType
 from navidisc.planner import DiscPlanningEngine
 from navidisc.ui import Console, ProgressDisplay
 from navidisc.ui.console import create_event_handler
+
+
+def setup_logging(verbose: bool, quiet: bool) -> None:
+    """Configure logging based on verbosity level.
+    
+    Args:
+        verbose: Enable debug logging.
+        quiet: Disable most logging.
+    """
+    if quiet:
+        level = logging.ERROR
+    elif verbose:
+        level = logging.DEBUG
+    else:
+        level = logging.INFO
+    
+    logging.basicConfig(
+        level=level,
+        format='%(asctime)s [%(levelname)8s] %(name)s: %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+    )
+    
+    # Set specific loggers
+    logging.getLogger('navidisc').setLevel(level)
+    
+    # Reduce noise from external libraries unless verbose
+    if not verbose:
+        logging.getLogger('httpx').setLevel(logging.WARNING)
+        logging.getLogger('httpcore').setLevel(logging.WARNING)
 
 
 # Common options
@@ -131,6 +161,9 @@ def burn_playlist(
     """
     if not name and not playlist_id:
         raise click.UsageError("Must provide playlist name or --id")
+
+    # Setup logging
+    setup_logging(verbose, quiet)
 
     # Load configuration
     cfg = load_config_with_fallback(config)
@@ -406,6 +439,9 @@ def web(
             "Web dependencies not installed.\n"
             "Install with: pip install navidisc[web]"
         )
+
+    # Setup logging
+    setup_logging(verbose, quiet)
 
     console = Console(quiet=quiet)
     console.info(f"Starting Navidisc web interface at http://{host}:{port}")

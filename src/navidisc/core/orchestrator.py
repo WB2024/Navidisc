@@ -129,6 +129,8 @@ class Orchestrator:
         old_state = self.session.state
         self.session.state = new_state
         self.session.updated_at = datetime.now()
+        
+        logger.debug(f"State transition: {old_state.value} -> {new_state.value}")
 
         self._emit(OrchestratorEvent.STATE_CHANGED, {
             "old_state": old_state.value,
@@ -304,6 +306,8 @@ class Orchestrator:
     async def _step_authenticate(self) -> None:
         """Authenticate with Navidrome."""
         client = self._get_api_client()
+        
+        logger.info(f"Authenticating with {self.config.navidrome.url}")
 
         self._emit(OrchestratorEvent.PROGRESS, {
             "step": "authenticate",
@@ -312,6 +316,7 @@ class Orchestrator:
 
         await client.authenticate()
         self._set_state(OrchestratorState.AUTHENTICATED)
+        logger.debug("Authentication successful")
 
     async def _step_resolve_playlist(
         self,
@@ -324,6 +329,7 @@ class Orchestrator:
         downloader = self._get_downloader()
 
         # Fetch playlist
+        logger.debug(f"Fetching playlist: name={name}, id={playlist_id}")
         self._emit(OrchestratorEvent.PROGRESS, {
             "step": "fetch_playlist",
             "message": "Fetching playlist...",
@@ -335,6 +341,7 @@ class Orchestrator:
             self._playlist = await client.get_playlist_by_name(name)
 
         self.session.playlist_id = self._playlist.id
+        logger.info(f"Playlist loaded: '{self._playlist.name}' ({len(self._playlist.tracks)} tracks)")
 
         # Resolve tracks
         self._emit(OrchestratorEvent.PROGRESS, {
@@ -346,6 +353,7 @@ class Orchestrator:
             self._playlist.tracks,
             lambda track_id: client.get_download_url(track_id),
         )
+        logger.debug(f"Track resolution complete: {len(self._resolved_tracks)} tracks")
 
         # Download any tracks that need downloading
         download_count = sum(
@@ -354,6 +362,7 @@ class Orchestrator:
         )
 
         if download_count > 0:
+            logger.info(f"Starting download of {download_count} tracks")
             self._emit(OrchestratorEvent.PROGRESS, {
                 "step": "download_tracks",
                 "message": f"Downloading {download_count} tracks...",
@@ -367,11 +376,14 @@ class Orchestrator:
                 ),
             )
             self._track_paths.update(downloaded)
+            logger.debug(f"Downloaded {len(downloaded)} tracks")
 
         # Add local tracks to paths
         for rt in self._resolved_tracks:
             if rt.method == ResolveMethod.LOCAL and rt.local_path:
                 self._track_paths[rt.track.id] = rt.local_path
+        
+        logger.debug(f"Total tracks prepared: {len(self._track_paths)}")
 
         # Convert tracks to MP3 if conversion is enabled
         converter = self._get_converter()
@@ -383,6 +395,7 @@ class Orchestrator:
             }
             
             if needs_convert:
+                logger.info(f"Converting {len(needs_convert)} tracks to MP3 (quality: {self.config.media.conversion_quality})")
                 self._emit(OrchestratorEvent.PROGRESS, {
                     "step": "converting",
                     "message": f"Converting {len(needs_convert)} tracks to MP3...",
@@ -401,12 +414,14 @@ class Orchestrator:
                     ),
                 )
                 self._track_paths.update(converted)
+                logger.debug(f"Converted {len(converted)} tracks")
 
         self._set_state(OrchestratorState.PLAYLIST_RESOLVED)
 
     async def _step_plan(self) -> None:
         """Create the disc burn plan."""
         planner = self._get_planner()
+        logger.info("Creating burn plan...")
 
         self._emit(OrchestratorEvent.PROGRESS, {
             "step": "planning",
@@ -426,6 +441,8 @@ class Orchestrator:
 
         plan = planner.plan(self._playlist, size_lookup)
         self.session.burn_plan = plan
+        logger.info(f"Burn plan created: {plan.total_discs} disc(s) required")
+        logger.debug(f"Plan details: disc_type={plan.disc_type}, capacity={plan.disc_capacity_bytes or plan.disc_capacity_seconds}")
 
         self._emit(OrchestratorEvent.PROGRESS, {
             "step": "planned",
@@ -440,6 +457,8 @@ class Orchestrator:
         staging = self._get_staging()
         plan = self.session.burn_plan
         disc_plan = plan.discs[disc_number - 1]
+        
+        logger.info(f"Staging disc {disc_number}/{plan.total_discs} ({len(disc_plan.tracks)} tracks)")
 
         self._set_state(OrchestratorState.STAGING_DISC)
         self.session.current_disc = disc_number
@@ -455,6 +474,7 @@ class Orchestrator:
 
         staged = staging.stage_disc(disc_plan, self._track_paths, track_lookup)
         self._staged_discs.append(staged)
+        logger.debug(f"Staged {len(staged.files)} files to {staged.directory}")
 
         self._emit(OrchestratorEvent.PROGRESS, {
             "step": "staged",
@@ -470,6 +490,7 @@ class Orchestrator:
 
         # Wait for disc insertion
         self._set_state(OrchestratorState.WAIT_FOR_DISC)
+        logger.info(f"Waiting for disc {disc_number} to be inserted into {self.config.burning.device}")
 
         self._emit(OrchestratorEvent.DISC_REQUIRED, {
             "disc_number": disc_number,
@@ -479,6 +500,7 @@ class Orchestrator:
 
         # Check device readiness
         ready, message = await burner.check_device(self.config.burning.device)
+        logger.debug(f"Device ready check: ready={ready}, message={message}")
         if not ready and not self.dry_run:
             self._add_error(
                 error_type="DeviceNotReady",
@@ -492,6 +514,7 @@ class Orchestrator:
 
         # Burn the disc
         self._set_state(OrchestratorState.BURNING_DISC)
+        logger.info(f"Starting burn of disc {disc_number}/{plan.total_discs} (dry_run={self.dry_run})")
 
         self._emit(OrchestratorEvent.BURN_STARTED, {
             "disc_number": disc_number,
@@ -514,6 +537,9 @@ class Orchestrator:
         )
 
         self.session.burn_results.append(result)
+        logger.info(f"Burn completed: disc {disc_number}, status={result.status}")
+        if result.error_message:
+            logger.error(f"Burn error: {result.error_message}")
 
         # Verify if enabled
         if self.config.burning.verify_after_burn and result.status == BurnStatus.SUCCESS:
@@ -522,6 +548,7 @@ class Orchestrator:
 
         # Eject if enabled
         if self.config.burning.eject_after_burn:
+            logger.debug(f"Ejecting disc from {self.config.burning.device}")
             await burner.eject(self.config.burning.device)
 
         self._emit(OrchestratorEvent.BURN_COMPLETED, {
