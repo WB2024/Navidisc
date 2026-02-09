@@ -7,12 +7,16 @@ This module provides:
 - Event emission for UI updates
 """
 
+import logging
+import shutil
 import uuid
 from collections.abc import Callable
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from navidisc.api import SubsonicClient
 from navidisc.burner import BurnerAdapter, detect_backend
