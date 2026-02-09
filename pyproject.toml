@@ -62,7 +62,8 @@ Homepage = "https://github.com/navidisc/navidisc"
 Documentation = "https://github.com/navidisc/navidisc#readme"
 Repository = "https://github.com/navidisc/navidisc"
 
-[tool.hatch.build.targets.wheel]
+[tool.hatch.build]
+# Explicitly configure src-layout
 packages = ["src/navidisc"]
 
 [tool.ruff]
