@@ -158,7 +158,7 @@ class Orchestrator:
             context=context or {},
         )
         self.session.errors.append(error)
-        self._emit(OrchestratorEvent.ERROR, error.model_dump())
+        self._emit(OrchestratorEvent.ERROR, error.model_dump(mode='json'))
         return error
 
     # =========================================================================
@@ -282,7 +282,7 @@ class Orchestrator:
             self._emit(OrchestratorEvent.COMPLETE, {
                 "session_id": self.session.session_id,
                 "total_discs": self.session.burn_plan.total_discs,
-                "results": [r.model_dump() for r in self.session.burn_results],
+                "results": [r.model_dump(mode='json') for r in self.session.burn_results],
             })
 
         except Exception as e:
@@ -526,7 +526,7 @@ class Orchestrator:
 
         self._emit(OrchestratorEvent.BURN_COMPLETED, {
             "disc_number": disc_number,
-            "result": result.model_dump(),
+            "result": result.model_dump(mode='json'),
         })
 
     # =========================================================================
