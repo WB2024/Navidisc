@@ -97,8 +97,8 @@ dmypy.json
 # Ruff
 .ruff_cache/
 
-# Staging directory (runtime)
-staging/
+# Staging directory (runtime) - only at repo root
+/staging/
 
 # Local config (may contain credentials)
 config.yaml
