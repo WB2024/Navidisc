@@ -205,6 +205,8 @@ function updateDiscSelection() {
     const allCheckboxes = document.querySelectorAll('.disc-checkbox');
     const totalDiscs = allCheckboxes.length;
     
+    if (totalDiscs === 0) return; // No checkboxes loaded yet
+    
     allCheckboxes.forEach(cb => {
         if (cb.checked) {
             selectedDiscs.push(parseInt(cb.dataset.disc, 10));
@@ -227,21 +229,28 @@ function updateDiscSelection() {
     });
     
     // Update selection count indicator
-    const totalDiscs = document.querySelectorAll('.disc-checkbox').length;
     const countEl = document.getElementById('selected-disc-count');
     if (countEl) {
         countEl.textContent = `${selectedDiscs.length} of ${totalDiscs} discs selected`;
     }
 }
 
-// Initialize selection on load
-document.addEventListener('DOMContentLoaded', function() {
-    // Give Alpine.js time to initialize, then trigger initial selection update
-    setTimeout(updateDiscSelection, 100);
-});
+// Initialize selection after content loads
+// Use multiple attempts to handle race conditions with Alpine.js
+function initDiscSelection() {
+    setTimeout(updateDiscSelection, 50);
+    setTimeout(updateDiscSelection, 200);
+    setTimeout(updateDiscSelection, 500);
+}
+
+// Trigger on DOMContentLoaded (for direct page loads)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDiscSelection);
+} else {
+    // DOM already loaded (HTMX swap)
+    initDiscSelection();
+}
 
 // Also trigger when HTMX swaps content
-document.addEventListener('htmx:afterSwap', function() {
-    setTimeout(updateDiscSelection, 100);
-});
+document.addEventListener('htmx:afterSwap', initDiscSelection);
 </script>

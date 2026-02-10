@@ -55,7 +55,7 @@
     </div>
 
     <!-- Selected Discs Indicator & Start Burn Button -->
-    <div class="flex items-center justify-between" x-show="!burning">
+    <div class="flex items-center justify-between" x-show="!burning" x-init="$nextTick(() => syncDiscSelection())">
         <div class="text-sm">
             <span class="text-surface-600 dark:text-surface-400">
                 Ready to burn: 
@@ -239,6 +239,25 @@ function burnWorkflow() {
                 this.selectedDiscs = e.detail.selectedDiscs || [];
                 this.totalDiscs = e.detail.totalDiscs || 0;
             });
+            
+            // Also sync after HTMX loads content (handles race condition)
+            document.body.addEventListener('htmx:afterSwap', () => {
+                this.$nextTick(() => this.syncDiscSelection());
+            });
+        },
+        
+        // Sync disc selection directly from DOM checkboxes
+        syncDiscSelection() {
+            const checkboxes = document.querySelectorAll('.disc-checkbox');
+            if (checkboxes.length === 0) return;
+            
+            this.totalDiscs = checkboxes.length;
+            this.selectedDiscs = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) {
+                    this.selectedDiscs.push(parseInt(cb.dataset.disc, 10));
+                }
+            });
         },
         
         getPlaylistName() {
@@ -247,6 +266,11 @@ function burnWorkflow() {
         },
         
         getSelectedDiscsDisplay() {
+            // Sync from DOM if we have no data yet but checkboxes exist
+            if (this.selectedDiscs.length === 0 && this.totalDiscs === 0) {
+                this.syncDiscSelection();
+            }
+            
             if (this.selectedDiscs.length === 0) {
                 return 'No discs selected';
             }
@@ -257,6 +281,9 @@ function burnWorkflow() {
         },
 
         async startBurn(playlistId) {
+            // Sync selection from DOM to ensure we have latest state
+            this.syncDiscSelection();
+            
             // Check if any discs are selected
             if (this.selectedDiscs.length === 0) {
                 alert('Please select at least one disc to burn.');
