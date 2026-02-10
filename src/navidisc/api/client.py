@@ -161,6 +161,49 @@ class SubsonicClient:
         self._authenticated = True
         return True
 
+    async def _fetch_navidrome_song_path(self, song_id: str) -> str | None:
+        """Fetch the real file path from Navidrome's native API.
+        
+        Navidrome has a native REST API at /api/ that returns the actual
+        filesystem path, unlike the Subsonic API which returns a logical path.
+        
+        Args:
+            song_id: The song/track ID.
+            
+        Returns:
+            The actual file path, or None if not available.
+        """
+        import base64
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            client = await self._get_client()
+            
+            # Navidrome's native API uses basic auth
+            credentials = base64.b64encode(
+                f"{self.username}:{self.password}".encode()
+            ).decode()
+            
+            url = f"{self.base_url}/api/song/{song_id}"
+            headers = {"Authorization": f"Basic {credentials}"}
+            
+            response = await client.get(url, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                real_path = data.get("path")
+                if real_path:
+                    logger.debug(f"Navidrome API returned path: {real_path}")
+                    return real_path
+            else:
+                logger.debug(f"Navidrome API returned {response.status_code} for song {song_id}")
+                
+        except Exception as e:
+            logger.debug(f"Failed to fetch path from Navidrome API: {e}")
+            
+        return None
+
     async def get_playlists(self) -> list[Playlist]:
         """Get all playlists accessible to the user.
 
@@ -199,6 +242,9 @@ class SubsonicClient:
         Raises:
             PlaylistNotFoundError: If playlist doesn't exist.
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         try:
             response = await self._request("getPlaylist", {"id": playlist_id})
         except APIError as e:
@@ -214,6 +260,18 @@ class SubsonicClient:
             tracks_data = [tracks_data]
 
         tracks = [self._parse_track(t) for t in tracks_data]
+        
+        # Try to fetch real file paths from Navidrome's native API
+        # This is necessary because the Subsonic API returns a logical path, not the real filesystem path
+        logger.info(f"Fetching real file paths for {len(tracks)} tracks from Navidrome API...")
+        
+        for track in tracks:
+            real_path = await self._fetch_navidrome_song_path(track.id)
+            if real_path:
+                logger.debug(f"Track '{track.title}': updated path from '{track.path}' to '{real_path}'")
+                track.path = real_path
+            else:
+                logger.debug(f"Track '{track.title}': keeping Subsonic path '{track.path}'")
 
         return Playlist(
             id=str(playlist_data.get("id")),
