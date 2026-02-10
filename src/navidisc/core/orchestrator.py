@@ -186,6 +186,8 @@ class Orchestrator:
             if self.config.media.local_library_path:
                 library_paths.append(self.config.media.local_library_path)
             
+            logger.info(f"Creating resolver: library_paths={library_paths}, download_mode={self.config.media.download_mode}")
+            
             self._resolver = MediaResolver(
                 library_paths=library_paths,
                 download_mode=self.config.media.download_mode,
@@ -358,7 +360,15 @@ class Orchestrator:
             self._playlist.tracks,
             lambda track_id: client.get_download_url(track_id),
         )
-        logger.debug(f"Track resolution complete: {len(self._resolved_tracks)} tracks")
+        
+        # Log resolution summary for debugging
+        resolution_summary = resolver.get_resolution_summary(self._resolved_tracks)
+        logger.info(f"Track resolution complete: {resolution_summary['local']} local, {resolution_summary['download']} download, {resolution_summary['not_found']} not found")
+        
+        # Log first track's path for debugging
+        if self._playlist.tracks:
+            first_track = self._playlist.tracks[0]
+            logger.debug(f"Example track path from Navidrome: {first_track.path}")
 
         # Download any tracks that need downloading
         download_count = sum(

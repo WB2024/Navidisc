@@ -5,11 +5,14 @@ This module determines the best way to obtain each track:
 2. Remote download via Subsonic API
 """
 
+import logging
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
 from navidisc.models import DownloadMode, Track
+
+logger = logging.getLogger(__name__)
 
 
 class ResolveMethod(StrEnum):
@@ -87,8 +90,11 @@ class MediaResolver:
         Returns:
             ResolvedTrack with resolution details.
         """
+        logger.debug(f"Resolving track: '{track.title}' | download_mode={self.download_mode.value} | library_paths={[str(p) for p in self.library_paths]} | track.path={track.path}")
+
         # Download-always mode: always use download
         if self.download_mode == DownloadMode.DOWNLOAD_ALWAYS:
+            logger.debug(f"  -> DOWNLOAD (mode=always)")
             return ResolvedTrack(
                 track=track,
                 method=ResolveMethod.DOWNLOAD,
@@ -100,6 +106,7 @@ class MediaResolver:
         local_path = self._find_local_file(track)
 
         if local_path is not None:
+            logger.debug(f"  -> LOCAL: {local_path}")
             return ResolvedTrack(
                 track=track,
                 method=ResolveMethod.LOCAL,
@@ -110,6 +117,7 @@ class MediaResolver:
 
         # Local-only mode: fail if not found locally
         if self.download_mode == DownloadMode.LOCAL_ONLY:
+            logger.warning(f"  -> NOT_FOUND (local-only mode, track.path={track.path})")
             return ResolvedTrack(
                 track=track,
                 method=ResolveMethod.NOT_FOUND,
@@ -117,6 +125,7 @@ class MediaResolver:
             )
 
         # Download-if-missing mode: use download
+        logger.debug(f"  -> DOWNLOAD (not found locally)")
         return ResolvedTrack(
             track=track,
             method=ResolveMethod.DOWNLOAD,
@@ -146,9 +155,9 @@ class MediaResolver:
     def _find_local_file(self, track: Track) -> Path | None:
         """Find a track's local file.
 
-        Searches library paths for the track file using:
-        1. The exact path from track metadata (if within library)
-        2. Path-based matching within library directories
+        Searches library paths for the track file. Handles Docker path mapping
+        where Navidrome may report paths like /music/Artist/Album/Track.flac
+        but the actual files are at a different host path.
 
         Args:
             track: Track to find.
@@ -157,28 +166,59 @@ class MediaResolver:
             Path to local file if found, None otherwise.
         """
         if not self.library_paths:
+            logger.debug(f"No library paths configured, cannot find local file for: {track.title}")
             return None
 
-        # Try exact path from track metadata
-        if track.path:
-            for lib_path in self.library_paths:
-                # Track path might be relative to library or absolute
-                candidates = [
-                    lib_path / track.path,
-                    Path(track.path),
-                ]
+        if not track.path:
+            logger.debug(f"Track has no path metadata: {track.title}")
+            return None
 
-                for candidate in candidates:
+        logger.debug(f"Looking for local file: track.path={track.path}")
+
+        # Common Navidrome Docker music folder prefixes to strip
+        docker_prefixes = ['/music/', '/music', 'music/']
+
+        for lib_path in self.library_paths:
+            logger.debug(f"Checking library path: {lib_path}")
+
+            # Build list of candidate paths to check
+            candidates = []
+            track_path = track.path
+
+            # Try stripping common Docker prefixes (e.g., /music/Artist/Album/file.flac -> Artist/Album/file.flac)
+            relative_path = track_path
+            for prefix in docker_prefixes:
+                if track_path.startswith(prefix):
+                    relative_path = track_path[len(prefix):]
+                    logger.debug(f"  Stripped Docker prefix '{prefix}' -> {relative_path}")
+                    break
+            
+            # Also try stripping leading slashes
+            relative_path = relative_path.lstrip('/')
+            
+            # Primary candidate: library path + relative path (after stripping Docker prefix)
+            candidates.append(lib_path / relative_path)
+            
+            # Also try the original path variations
+            if track_path.startswith('/'):
+                candidates.append(lib_path / track_path.lstrip('/'))
+            candidates.append(lib_path / track_path)
+
+            # Try absolute path directly if it exists
+            if Path(track_path).is_absolute():
+                candidates.append(Path(track_path))
+
+            for candidate in candidates:
+                logger.debug(f"  Trying candidate: {candidate}")
+                try:
                     if candidate.exists() and candidate.is_file():
-                        # Verify it's within an allowed library path
-                        try:
-                            candidate.resolve().relative_to(lib_path.resolve())
-                            return candidate.resolve()
-                        except ValueError:
-                            # Not within this library path
-                            if candidate == Path(track.path) and candidate.exists():
-                                return candidate.resolve()
+                        logger.info(f"Found local file: {candidate}")
+                        return candidate.resolve()
+                except (OSError, PermissionError) as e:
+                    logger.debug(f"  Error checking {candidate}: {e}")
+                    continue
 
+        logger.debug(f"Could not find local file for: {track.title} (path: {track.path})")
         return None
 
     def get_resolution_summary(
