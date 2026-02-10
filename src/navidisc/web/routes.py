@@ -321,6 +321,11 @@ async def save_configuration(request: Request):
         # Save to file
         config_path = get_default_config_path()
         save_config(config, config_path)
+        
+        # Log what was saved for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Config saved: local_library_path={config.media.local_library_path}, download_mode={config.media.download_mode.value}")
 
         # Update app state
         request.app.state.config = config

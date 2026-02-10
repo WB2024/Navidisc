@@ -94,6 +94,13 @@ class Orchestrator:
         """
         self.config = config
         self.dry_run = dry_run
+        
+        # Log key config values for debugging
+        logger.info(f"Orchestrator initialized with config:")
+        logger.info(f"  - local_library_path: {config.media.local_library_path}")
+        logger.info(f"  - download_mode: {config.media.download_mode.value}")
+        logger.info(f"  - conversion_quality: {config.media.conversion_quality.value}")
+        logger.info(f"  - staging_dir: {config.media.staging_dir}")
 
         # Initialize session
         self.session = SessionState(
@@ -369,6 +376,25 @@ class Orchestrator:
         if self._playlist.tracks:
             first_track = self._playlist.tracks[0]
             logger.debug(f"Example track path from Navidrome: {first_track.path}")
+
+        # Check for NOT_FOUND tracks and fail early with helpful message
+        not_found_tracks = [rt for rt in self._resolved_tracks if rt.method == ResolveMethod.NOT_FOUND]
+        if not_found_tracks:
+            # Log details about each not-found track
+            for rt in not_found_tracks[:5]:  # Show first 5
+                logger.error(f"Track not found: '{rt.track.title}' by {rt.track.artist} (path: {rt.track.path})")
+            if len(not_found_tracks) > 5:
+                logger.error(f"... and {len(not_found_tracks) - 5} more tracks not found")
+            
+            # Provide helpful error message
+            library_paths_str = ', '.join(str(p) for p in (self.config.media.local_library_path,)) if self.config.media.local_library_path else 'None'
+            error_msg = (
+                f"{len(not_found_tracks)} track(s) could not be found locally. "
+                f"Local library path: {library_paths_str}. "
+                f"Download mode: {self.config.media.download_mode.value}. "
+                f"Check that the path matches your Navidrome music folder."
+            )
+            raise OrchestratorError(error_msg)
 
         # Download any tracks that need downloading
         download_count = sum(
