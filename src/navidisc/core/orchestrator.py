@@ -284,10 +284,10 @@ class Orchestrator:
             # Step 1: Authenticate
             await self._step_authenticate()
 
-            # Step 2: Resolve playlist
-            await self._step_resolve_playlist(playlist_name, playlist_id)
+            # Step 2: Fetch playlist metadata
+            await self._step_fetch_playlist(playlist_name, playlist_id)
 
-            # Step 3: Plan discs
+            # Step 3: Plan discs (using API-reported sizes)
             await self._step_plan()
 
             # Step 4: Determine which discs to burn
@@ -302,7 +302,18 @@ class Orchestrator:
                 discs_to_burn = list(range(1, total_discs + 1))
                 logger.info(f"Burning all {total_discs} disc(s)")
 
-            # Step 5: Stage and burn each selected disc
+            # Step 5: Get track IDs from selected discs only
+            selected_track_ids = set()
+            for disc_num in discs_to_burn:
+                disc_plan = self.session.burn_plan.discs[disc_num - 1]
+                selected_track_ids.update(disc_plan.track_ids)
+            
+            logger.info(f"Selected discs contain {len(selected_track_ids)} tracks to prepare")
+
+            # Step 6: Resolve and prepare only selected tracks
+            await self._step_resolve_selected_tracks(selected_track_ids)
+
+            # Step 7: Stage and burn each selected disc
             for disc_number in discs_to_burn:
                 await self._step_stage_disc(disc_number)
                 await self._step_burn_disc(disc_number)
@@ -347,15 +358,13 @@ class Orchestrator:
         self._set_state(OrchestratorState.AUTHENTICATED)
         logger.debug("Authentication successful")
 
-    async def _step_resolve_playlist(
+    async def _step_fetch_playlist(
         self,
         name: str | None,
         playlist_id: str | None,
     ) -> None:
-        """Resolve playlist and track files."""
+        """Fetch playlist metadata (no downloading yet)."""
         client = self._get_api_client()
-        resolver = self._get_resolver()
-        downloader = self._get_downloader()
 
         # Fetch playlist
         logger.debug(f"Fetching playlist: name={name}, id={playlist_id}")
@@ -371,26 +380,40 @@ class Orchestrator:
 
         self.session.playlist_id = self._playlist.id
         logger.info(f"Playlist loaded: '{self._playlist.name}' ({len(self._playlist.tracks)} tracks)")
+        
+        # Log first track's path for debugging
+        if self._playlist.tracks:
+            first_track = self._playlist.tracks[0]
+            logger.debug(f"Example track path from Navidrome: {first_track.path}")
+
+    async def _step_resolve_selected_tracks(self, selected_track_ids: set[str]) -> None:
+        """Resolve and prepare only the tracks that will be burned.
+        
+        Args:
+            selected_track_ids: Set of track IDs to resolve (from selected discs).
+        """
+        client = self._get_api_client()
+        resolver = self._get_resolver()
+        downloader = self._get_downloader()
+
+        # Filter playlist tracks to only selected ones
+        selected_tracks = [t for t in self._playlist.tracks if t.id in selected_track_ids]
+        logger.info(f"Preparing {len(selected_tracks)} tracks for selected discs")
 
         # Resolve tracks
         self._emit(OrchestratorEvent.PROGRESS, {
             "step": "resolve_tracks",
-            "message": f"Resolving {len(self._playlist.tracks)} tracks...",
+            "message": f"Resolving {len(selected_tracks)} tracks...",
         })
 
         self._resolved_tracks = resolver.resolve_many(
-            self._playlist.tracks,
+            selected_tracks,
             lambda track_id: client.get_download_url(track_id),
         )
         
         # Log resolution summary for debugging
         resolution_summary = resolver.get_resolution_summary(self._resolved_tracks)
         logger.info(f"Track resolution complete: {resolution_summary['local']} local, {resolution_summary['download']} download, {resolution_summary['not_found']} not found")
-        
-        # Log first track's path for debugging
-        if self._playlist.tracks:
-            first_track = self._playlist.tracks[0]
-            logger.debug(f"Example track path from Navidrome: {first_track.path}")
 
         # Check for NOT_FOUND tracks and fail early with helpful message
         not_found_tracks = [rt for rt in self._resolved_tracks if rt.method == ResolveMethod.NOT_FOUND]
@@ -475,7 +498,11 @@ class Orchestrator:
         self._set_state(OrchestratorState.PLAYLIST_RESOLVED)
 
     async def _step_plan(self) -> None:
-        """Create the disc burn plan."""
+        """Create the disc burn plan using API-reported sizes.
+        
+        This runs BEFORE track resolution/downloading so we can determine
+        which discs are selected and only download tracks for those discs.
+        """
         planner = self._get_planner()
         logger.info("Creating burn plan...")
 
@@ -484,16 +511,12 @@ class Orchestrator:
             "message": "Creating disc plan...",
         })
 
-        # Build size lookup from actual files on disk (which may have been
-        # converted to MP3), falling back to the API-reported size only when
-        # no local file is available yet.
+        # Build size lookup from API-reported sizes (track.size_bytes).
+        # We haven't downloaded anything yet, so we use the metadata sizes.
         size_lookup = {}
-        for rt in self._resolved_tracks:
-            if rt.track.id in self._track_paths:
-                # Prefer actual file size – this reflects post-conversion size
-                size_lookup[rt.track.id] = self._track_paths[rt.track.id].stat().st_size
-            elif rt.size_bytes:
-                size_lookup[rt.track.id] = rt.size_bytes
+        for track in self._playlist.tracks:
+            if track.size_bytes:
+                size_lookup[track.id] = track.size_bytes
 
         plan = planner.plan(self._playlist, size_lookup)
         self.session.burn_plan = plan
