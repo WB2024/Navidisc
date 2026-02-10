@@ -164,7 +164,7 @@ class SubsonicClient:
     async def _fetch_navidrome_song_path(self, song_id: str) -> str | None:
         """Fetch the real file path from Navidrome's native API.
         
-        Navidrome has a native REST API at /api/ that returns the actual
+        Navidrome has a native REST API at /api/inspect that returns the actual
         filesystem path, unlike the Subsonic API which returns a logical path.
         
         Args:
@@ -185,16 +185,19 @@ class SubsonicClient:
                 f"{self.username}:{self.password}".encode()
             ).decode()
             
-            url = f"{self.base_url}/api/song/{song_id}"
+            # Use the /api/inspect endpoint with id as query param
+            url = f"{self.base_url}/api/inspect"
             headers = {"Authorization": f"Basic {credentials}"}
+            params = {"id": song_id}
             
-            response = await client.get(url, headers=headers)
+            response = await client.get(url, headers=headers, params=params)
             
             if response.status_code == 200:
                 data = response.json()
-                real_path = data.get("path")
+                # The file path is in the "file" field
+                real_path = data.get("file")
                 if real_path:
-                    logger.debug(f"Navidrome API returned path: {real_path}")
+                    logger.debug(f"Navidrome API returned file: {real_path}")
                     return real_path
             else:
                 logger.debug(f"Navidrome API returned {response.status_code} for song {song_id}")
