@@ -255,9 +255,25 @@ class SubsonicClient:
         Returns:
             Track model instance.
         """
+        # Log full track data for debugging path issues
+        track_id = str(data.get("id"))
+        title = data.get("title", "Unknown")
+        path = data.get("path")
+        
+        # Log all keys and path-related fields for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(f"Track '{title}' raw data keys: {list(data.keys())}")
+        logger.debug(f"Track '{title}' path field: {path}")
+        
+        # Log any field that might contain path info
+        for key in ['path', 'file', 'filePath', 'mediaFile', 'fullPath']:
+            if key in data:
+                logger.info(f"Track '{title}' {key}: {data[key]}")
+        
         return Track(
-            id=str(data.get("id")),
-            title=data.get("title", "Unknown"),
+            id=track_id,
+            title=title,
             artist=data.get("artist", "Unknown Artist"),
             album=data.get("album"),
             track_number=data.get("track"),
@@ -265,8 +281,8 @@ class SubsonicClient:
             bitrate=data.get("bitRate"),
             size_bytes=data.get("size"),
             format=data.get("suffix"),
-            path=data.get("path"),
-            stream_url=self._build_stream_url(str(data.get("id"))),
+            path=path,
+            stream_url=self._build_stream_url(track_id),
         )
 
     def _build_stream_url(self, track_id: str) -> str:
