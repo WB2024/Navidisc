@@ -318,6 +318,24 @@
                         "Local Only" requires a local library path. "Prefer Local" is best when library is sometimes accessible.
                     </p>
                 </div>
+
+                <!-- Staging Directory -->
+                <div>
+                    <label for="staging_dir" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                        Staging Directory (Temp Files)
+                    </label>
+                    <input type="text" name="staging_dir" id="staging_dir"
+                           value="{{ config.media.staging_dir or '/tmp/navidisc' if config else '/tmp/navidisc' }}"
+                           placeholder="/tmp/navidisc"
+                           class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
+                                  bg-white dark:bg-surface-700 text-surface-900 dark:text-white
+                                  shadow-sm focus:border-primary-500 focus:ring-primary-500 
+                                  px-3 py-2 border">
+                    <p class="mt-1 text-xs text-surface-500 dark:text-surface-400">
+                        Directory for temporary downloads and converted files. Use a path with enough free space.
+                        Default /tmp may be too small on some systems.
+                    </p>
+                </div>
             </div>
         </div>
 

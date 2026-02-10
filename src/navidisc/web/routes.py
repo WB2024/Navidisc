@@ -270,6 +270,7 @@ async def save_configuration(request: Request):
         auto_cleanup = form.get("auto_cleanup") == "true"
         local_library_path = form.get("local_library_path", "").strip() or None
         download_mode = form.get("download_mode", "download-if-missing")
+        staging_dir = form.get("staging_dir", "").strip() or "/tmp/navidisc"
         
         # Validate required fields
         if not navidrome_url or not navidrome_username or not navidrome_password:
@@ -310,6 +311,7 @@ async def save_configuration(request: Request):
                 write_speed=WriteSpeed(write_speed),
             ),
             media=MediaConfig(
+                staging_dir=Path(staging_dir),
                 local_library_path=Path(local_library_path) if local_library_path else None,
                 download_mode=DownloadMode(download_mode),
                 conversion_quality=ConversionQuality(conversion_quality),
@@ -325,7 +327,7 @@ async def save_configuration(request: Request):
         # Log what was saved for debugging
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"Config saved: local_library_path={config.media.local_library_path}, download_mode={config.media.download_mode.value}")
+        logger.info(f"Config saved: staging_dir={config.media.staging_dir}, local_library_path={config.media.local_library_path}, download_mode={config.media.download_mode.value}")
 
         # Update app state
         request.app.state.config = config
