@@ -22,6 +22,7 @@ from navidisc.api import SubsonicClient
 from navidisc.burner import BurnerAdapter, detect_backend
 from navidisc.config import NavidiscConfig
 from navidisc.media import AudioConverter, Downloader, MediaResolver, ResolvedTrack
+from navidisc.media.converter import estimate_mp3_size
 from navidisc.media.resolver import ResolveMethod
 from navidisc.models import (
     BurnPlan,
@@ -287,10 +288,13 @@ class Orchestrator:
             # Step 2: Fetch playlist metadata
             await self._step_fetch_playlist(playlist_name, playlist_id)
 
-            # Step 3: Plan discs (using API-reported sizes)
+            # Step 3: Resolve ALL tracks (determine local vs download, no actual downloading)
+            await self._step_resolve_all_tracks()
+
+            # Step 4: Plan discs (using actual/estimated sizes accounting for conversion)
             await self._step_plan()
 
-            # Step 4: Determine which discs to burn
+            # Step 5: Determine which discs to burn
             total_discs = self.session.burn_plan.total_discs
             if selected_discs:
                 # Filter to only selected discs (validate they exist in plan)
@@ -302,7 +306,7 @@ class Orchestrator:
                 discs_to_burn = list(range(1, total_discs + 1))
                 logger.info(f"Burning all {total_discs} disc(s)")
 
-            # Step 5: Get track IDs from selected discs only
+            # Step 6: Get track IDs from selected discs only
             selected_track_ids = set()
             for disc_num in discs_to_burn:
                 disc_plan = self.session.burn_plan.discs[disc_num - 1]
@@ -310,10 +314,10 @@ class Orchestrator:
             
             logger.info(f"Selected discs contain {len(selected_track_ids)} tracks to prepare")
 
-            # Step 6: Resolve and prepare only selected tracks
-            await self._step_resolve_selected_tracks(selected_track_ids)
+            # Step 7: Download and convert only selected tracks
+            await self._step_prepare_selected_tracks(selected_track_ids)
 
-            # Step 7: Stage and burn each selected disc
+            # Step 8: Stage and burn each selected disc
             for disc_number in discs_to_burn:
                 await self._step_stage_disc(disc_number)
                 await self._step_burn_disc(disc_number)
@@ -386,45 +390,56 @@ class Orchestrator:
             first_track = self._playlist.tracks[0]
             logger.debug(f"Example track path from Navidrome: {first_track.path}")
 
-    async def _step_resolve_selected_tracks(self, selected_track_ids: set[str]) -> None:
-        """Resolve and prepare only the tracks that will be burned.
+    async def _step_resolve_all_tracks(self) -> None:
+        """Resolve ALL tracks to determine local vs download status.
         
-        Args:
-            selected_track_ids: Set of track IDs to resolve (from selected discs).
+        This does NOT download anything - it just determines how each track
+        will be obtained and gets actual sizes for local files.
         """
         client = self._get_api_client()
         resolver = self._get_resolver()
-        downloader = self._get_downloader()
 
-        # Filter playlist tracks to only selected ones
-        selected_tracks = [t for t in self._playlist.tracks if t.id in selected_track_ids]
-        logger.info(f"Preparing {len(selected_tracks)} tracks for selected discs")
-
-        # Resolve tracks
         self._emit(OrchestratorEvent.PROGRESS, {
             "step": "resolve_tracks",
-            "message": f"Resolving {len(selected_tracks)} tracks...",
+            "message": f"Resolving {len(self._playlist.tracks)} tracks...",
         })
 
         self._resolved_tracks = resolver.resolve_many(
-            selected_tracks,
+            self._playlist.tracks,
             lambda track_id: client.get_download_url(track_id),
         )
         
-        # Log resolution summary for debugging
+        # Log resolution summary
         resolution_summary = resolver.get_resolution_summary(self._resolved_tracks)
         logger.info(f"Track resolution complete: {resolution_summary['local']} local, {resolution_summary['download']} download, {resolution_summary['not_found']} not found")
+        
+        # Log first track's path for debugging
+        if self._resolved_tracks:
+            first_rt = self._resolved_tracks[0]
+            logger.debug(f"Example resolved track: {first_rt.track.title} -> {first_rt.method.value}")
+
+    async def _step_prepare_selected_tracks(self, selected_track_ids: set[str]) -> None:
+        """Download and convert only the tracks that will be burned.
+        
+        Uses already-resolved track info from _step_resolve_all_tracks.
+        
+        Args:
+            selected_track_ids: Set of track IDs to prepare (from selected discs).
+        """
+        downloader = self._get_downloader()
+
+        # Filter resolved tracks to only selected ones
+        selected_resolved = [rt for rt in self._resolved_tracks if rt.track.id in selected_track_ids]
+        logger.info(f"Preparing {len(selected_resolved)} tracks for selected discs")
 
         # Check for NOT_FOUND tracks and fail early with helpful message
-        not_found_tracks = [rt for rt in self._resolved_tracks if rt.method == ResolveMethod.NOT_FOUND]
+        not_found_tracks = [rt for rt in selected_resolved if rt.method == ResolveMethod.NOT_FOUND]
         if not_found_tracks:
-            # Log details about each not-found track
-            for rt in not_found_tracks[:5]:  # Show first 5
+            for rt in not_found_tracks[:5]:
                 logger.error(f"Track not found: '{rt.track.title}' by {rt.track.artist} (path: {rt.track.path})")
             if len(not_found_tracks) > 5:
                 logger.error(f"... and {len(not_found_tracks) - 5} more tracks not found")
             
-            # Provide helpful error message
             library_paths_str = ', '.join(str(p) for p in (self.config.media.local_library_path,)) if self.config.media.local_library_path else 'None'
             error_msg = (
                 f"{len(not_found_tracks)} track(s) could not be found locally. "
@@ -435,20 +450,17 @@ class Orchestrator:
             raise OrchestratorError(error_msg)
 
         # Download any tracks that need downloading
-        download_count = sum(
-            1 for rt in self._resolved_tracks
-            if rt.method == ResolveMethod.DOWNLOAD
-        )
+        download_tracks = [rt for rt in selected_resolved if rt.method == ResolveMethod.DOWNLOAD]
 
-        if download_count > 0:
-            logger.info(f"Starting download of {download_count} tracks")
+        if download_tracks:
+            logger.info(f"Starting download of {len(download_tracks)} tracks")
             self._emit(OrchestratorEvent.PROGRESS, {
                 "step": "download_tracks",
-                "message": f"Downloading {download_count} tracks...",
+                "message": f"Downloading {len(download_tracks)} tracks...",
             })
 
             downloaded = await downloader.download_many(
-                self._resolved_tracks,
+                download_tracks,
                 progress_callback=lambda p: self._emit(
                     OrchestratorEvent.PROGRESS,
                     {"step": "download", "track": p.filename, "percent": p.percent}
@@ -458,7 +470,7 @@ class Orchestrator:
             logger.debug(f"Downloaded {len(downloaded)} tracks")
 
         # Add local tracks to paths
-        for rt in self._resolved_tracks:
+        for rt in selected_resolved:
             if rt.method == ResolveMethod.LOCAL and rt.local_path:
                 self._track_paths[rt.track.id] = rt.local_path
         
@@ -467,7 +479,6 @@ class Orchestrator:
         # Convert tracks to MP3 if conversion is enabled
         converter = self._get_converter()
         if converter is not None:
-            # Count files that need conversion
             needs_convert = {
                 tid: path for tid, path in self._track_paths.items()
                 if converter.needs_conversion(path)
@@ -498,12 +509,15 @@ class Orchestrator:
         self._set_state(OrchestratorState.PLAYLIST_RESOLVED)
 
     async def _step_plan(self) -> None:
-        """Create the disc burn plan using API-reported sizes.
+        """Create the disc burn plan using accurate sizes.
         
-        This runs BEFORE track resolution/downloading so we can determine
-        which discs are selected and only download tracks for those discs.
+        Uses actual file sizes for local files, and estimates conversion sizes
+        based on track duration when conversion is enabled.
         """
         planner = self._get_planner()
+        converter = self._get_converter()
+        conversion_quality = self.config.media.conversion_quality
+        
         logger.info("Creating burn plan...")
 
         self._emit(OrchestratorEvent.PROGRESS, {
@@ -511,12 +525,33 @@ class Orchestrator:
             "message": "Creating disc plan...",
         })
 
-        # Build size lookup from API-reported sizes (track.size_bytes).
-        # We haven't downloaded anything yet, so we use the metadata sizes.
+        # Build size lookup with accurate/estimated sizes
         size_lookup = {}
-        for track in self._playlist.tracks:
-            if track.size_bytes:
-                size_lookup[track.id] = track.size_bytes
+        for rt in self._resolved_tracks:
+            track = rt.track
+            
+            if rt.method == ResolveMethod.LOCAL and rt.local_path:
+                # Local file - check if conversion will change the size
+                if converter and converter.needs_conversion(rt.local_path):
+                    # File will be converted - estimate post-conversion size
+                    if track.duration_seconds:
+                        estimated_size = estimate_mp3_size(track.duration_seconds, conversion_quality)
+                        size_lookup[track.id] = estimated_size
+                        logger.debug(f"Track '{track.title}': {rt.size_bytes} -> ~{estimated_size} (estimated MP3)")
+                    else:
+                        # No duration info, use original size as fallback
+                        size_lookup[track.id] = rt.size_bytes or track.size_bytes or 0
+                else:
+                    # No conversion needed - use actual file size
+                    size_lookup[track.id] = rt.size_bytes or track.size_bytes or 0
+            else:
+                # Download track - estimate based on conversion if enabled
+                if converter and conversion_quality != ConversionQuality.DISABLED and track.duration_seconds:
+                    estimated_size = estimate_mp3_size(track.duration_seconds, conversion_quality)
+                    size_lookup[track.id] = estimated_size
+                else:
+                    # Use API-reported size
+                    size_lookup[track.id] = track.size_bytes or 0
 
         plan = planner.plan(self._playlist, size_lookup)
         self.session.burn_plan = plan
