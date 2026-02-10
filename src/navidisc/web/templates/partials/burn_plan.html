@@ -60,21 +60,51 @@
     <!-- Disc Breakdown -->
     {% if plan and plan.discs %}
     <div class="px-6 py-4">
-        <h3 class="text-sm font-medium text-surface-700 dark:text-surface-300 mb-4">Disc Contents</h3>
+        <!-- Disc Selection Header -->
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-medium text-surface-700 dark:text-surface-300">Disc Contents</h3>
+            <div class="flex items-center space-x-2">
+                <span class="text-xs text-surface-500 dark:text-surface-400 mr-2">
+                    Select discs to burn:
+                </span>
+                <button type="button" 
+                        onclick="selectAllDiscs()"
+                        class="px-2 py-1 text-xs font-medium text-primary-600 dark:text-primary-400 
+                               hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded transition-colors">
+                    Select All
+                </button>
+                <button type="button" 
+                        onclick="deselectAllDiscs()"
+                        class="px-2 py-1 text-xs font-medium text-surface-600 dark:text-surface-400 
+                               hover:bg-surface-100 dark:hover:bg-surface-700 rounded transition-colors">
+                    Deselect All
+                </button>
+            </div>
+        </div>
         
-        <div class="space-y-4">
+        <div class="space-y-4" id="disc-list">
             {% for disc in plan.discs %}
-            <div class="border border-surface-200 dark:border-surface-600 rounded-lg overflow-hidden">
+            <div class="border border-surface-200 dark:border-surface-600 rounded-lg overflow-hidden disc-item" 
+                 data-disc-number="{{ disc.disc_number }}">
                 <!-- Disc Header -->
                 <div class="px-4 py-3 bg-surface-50 dark:bg-surface-700 flex items-center justify-between">
                     <div class="flex items-center">
-                        <svg class="h-5 w-5 text-surface-400 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <circle cx="12" cy="12" r="10" stroke-width="2"/>
-                            <circle cx="12" cy="12" r="3" stroke-width="2"/>
-                        </svg>
-                        <span class="font-medium text-surface-900 dark:text-white">
-                            Disc {{ disc.disc_number }}
-                        </span>
+                        <!-- Disc Selection Checkbox -->
+                        <input type="checkbox" 
+                               id="disc-{{ disc.disc_number }}"
+                               class="disc-checkbox h-4 w-4 text-primary-600 focus:ring-primary-500 border-surface-300 rounded mr-3 cursor-pointer"
+                               data-disc="{{ disc.disc_number }}"
+                               checked
+                               onchange="updateDiscSelection()">
+                        <label for="disc-{{ disc.disc_number }}" class="flex items-center cursor-pointer">
+                            <svg class="h-5 w-5 text-surface-400 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                                <circle cx="12" cy="12" r="3" stroke-width="2"/>
+                            </svg>
+                            <span class="font-medium text-surface-900 dark:text-white">
+                                Disc {{ disc.disc_number }}
+                            </span>
+                        </label>
                     </div>
                     {% if plan.disc_capacity_bytes %}
                     {% set utilization = disc.total_size_bytes / plan.disc_capacity_bytes %}
@@ -150,3 +180,68 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Disc Selection Helper Scripts -->
+<script>
+// Select all discs
+function selectAllDiscs() {
+    document.querySelectorAll('.disc-checkbox').forEach(cb => {
+        cb.checked = true;
+    });
+    updateDiscSelection();
+}
+
+// Deselect all discs
+function deselectAllDiscs() {
+    document.querySelectorAll('.disc-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
+    updateDiscSelection();
+}
+
+// Update disc selection and notify Alpine.js component
+function updateDiscSelection() {
+    const selectedDiscs = [];
+    const allCheckboxes = document.querySelectorAll('.disc-checkbox');
+    const totalDiscs = allCheckboxes.length;
+    
+    allCheckboxes.forEach(cb => {
+        if (cb.checked) {
+            selectedDiscs.push(parseInt(cb.dataset.disc, 10));
+        }
+    });
+    
+    // Dispatch custom event for Alpine.js to receive
+    window.dispatchEvent(new CustomEvent('disc-selection-changed', {
+        detail: { selectedDiscs, totalDiscs }
+    }));
+    
+    // Update visual styling for unselected discs
+    document.querySelectorAll('.disc-item').forEach(item => {
+        const discNum = parseInt(item.dataset.discNumber, 10);
+        if (selectedDiscs.includes(discNum)) {
+            item.classList.remove('opacity-50');
+        } else {
+            item.classList.add('opacity-50');
+        }
+    });
+    
+    // Update selection count indicator
+    const totalDiscs = document.querySelectorAll('.disc-checkbox').length;
+    const countEl = document.getElementById('selected-disc-count');
+    if (countEl) {
+        countEl.textContent = `${selectedDiscs.length} of ${totalDiscs} discs selected`;
+    }
+}
+
+// Initialize selection on load
+document.addEventListener('DOMContentLoaded', function() {
+    // Give Alpine.js time to initialize, then trigger initial selection update
+    setTimeout(updateDiscSelection, 100);
+});
+
+// Also trigger when HTMX swaps content
+document.addEventListener('htmx:afterSwap', function() {
+    setTimeout(updateDiscSelection, 100);
+});
+</script>

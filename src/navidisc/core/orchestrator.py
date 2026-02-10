@@ -262,6 +262,7 @@ class Orchestrator:
         playlist_name: str | None = None,
         playlist_id: str | None = None,
         event_handler: EventCallback | None = None,
+        selected_discs: list[int] | None = None,
     ) -> SessionState:
         """Run the complete playlist burn workflow.
 
@@ -269,6 +270,7 @@ class Orchestrator:
             playlist_name: Name of playlist to burn (mutually exclusive with id).
             playlist_id: ID of playlist to burn (mutually exclusive with name).
             event_handler: Callback for workflow events.
+            selected_discs: List of disc numbers to burn (1-indexed). If None, burn all.
 
         Returns:
             Final session state.
@@ -288,8 +290,20 @@ class Orchestrator:
             # Step 3: Plan discs
             await self._step_plan()
 
-            # Step 4: Stage and burn each disc
-            for disc_number in range(1, self.session.burn_plan.total_discs + 1):
+            # Step 4: Determine which discs to burn
+            total_discs = self.session.burn_plan.total_discs
+            if selected_discs:
+                # Filter to only selected discs (validate they exist in plan)
+                discs_to_burn = [d for d in selected_discs if 1 <= d <= total_discs]
+                discs_to_burn.sort()  # Burn in order
+                logger.info(f"Burning selected discs: {discs_to_burn} of {total_discs} total")
+            else:
+                # Burn all discs
+                discs_to_burn = list(range(1, total_discs + 1))
+                logger.info(f"Burning all {total_discs} disc(s)")
+
+            # Step 5: Stage and burn each selected disc
+            for disc_number in discs_to_burn:
                 await self._step_stage_disc(disc_number)
                 await self._step_burn_disc(disc_number)
 
@@ -297,7 +311,8 @@ class Orchestrator:
             self._set_state(OrchestratorState.COMPLETE)
             self._emit(OrchestratorEvent.COMPLETE, {
                 "session_id": self.session.session_id,
-                "total_discs": self.session.burn_plan.total_discs,
+                "total_discs": len(discs_to_burn),
+                "selected_discs": discs_to_burn,
                 "results": [r.model_dump(mode='json') for r in self.session.burn_results],
             })
 

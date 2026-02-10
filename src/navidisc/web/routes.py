@@ -62,6 +62,7 @@ class BurnRequest(BaseModel):
     playlist_id: str
     playlist_name: str
     dry_run: bool = False
+    selected_discs: list[int] | None = None  # If None, burn all discs
 
 
 # =============================================================================
@@ -413,6 +414,7 @@ async def start_burn(request: Request, burn_request: BurnRequest):
         "playlist_id": burn_request.playlist_id,
         "playlist_name": burn_request.playlist_name,
         "dry_run": burn_request.dry_run,
+        "selected_discs": burn_request.selected_discs,  # None = all discs
         "status": "starting",
         "events": asyncio.Queue(),
         "cancelled": False,
@@ -466,6 +468,7 @@ async def burn_stream(request: Request, session_id: str):
                         await orchestrator.run_playlist_burn(
                             playlist_id=session["playlist_id"],
                             event_handler=handle_event,
+                            selected_discs=session.get("selected_discs"),
                         )
                 except Exception as e:
                     session["events"].put_nowait(

@@ -54,10 +54,19 @@
         </div>
     </div>
 
-    <!-- Start Burn Button -->
-    <div class="flex justify-end" x-show="!burning">
+    <!-- Selected Discs Indicator & Start Burn Button -->
+    <div class="flex items-center justify-between" x-show="!burning">
+        <div class="text-sm">
+            <span class="text-surface-600 dark:text-surface-400">
+                Ready to burn: 
+            </span>
+            <span class="font-medium" 
+                  :class="selectedDiscs.length > 0 ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400'"
+                  x-text="getSelectedDiscsDisplay()">
+            </span>
+        </div>
         <button @click="startBurn('{{ playlist_id }}')"
-                :disabled="burning"
+                :disabled="burning || selectedDiscs.length === 0"
                 class="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm 
                        text-base font-medium text-white bg-red-600 hover:bg-red-700 
                        focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500
@@ -221,13 +230,39 @@ function burnWorkflow() {
         events: [],
         sessionId: null,
         eventSource: null,
+        selectedDiscs: [],  // Tracks which disc numbers are selected for burning
+        totalDiscs: 0,      // Total number of discs in the plan
+        
+        init() {
+            // Listen for disc selection changes from burn_plan.html
+            window.addEventListener('disc-selection-changed', (e) => {
+                this.selectedDiscs = e.detail.selectedDiscs || [];
+                this.totalDiscs = e.detail.totalDiscs || 0;
+            });
+        },
         
         getPlaylistName() {
             const planEl = document.getElementById('burn-plan-content');
             return planEl ? planEl.dataset.playlistName : 'Playlist';
         },
+        
+        getSelectedDiscsDisplay() {
+            if (this.selectedDiscs.length === 0) {
+                return 'No discs selected';
+            }
+            if (this.selectedDiscs.length === this.totalDiscs && this.totalDiscs > 0) {
+                return `All ${this.totalDiscs} discs`;
+            }
+            return `Disc${this.selectedDiscs.length > 1 ? 's' : ''} ${this.selectedDiscs.join(', ')}`;
+        },
 
         async startBurn(playlistId) {
+            // Check if any discs are selected
+            if (this.selectedDiscs.length === 0) {
+                alert('Please select at least one disc to burn.');
+                return;
+            }
+            
             this.burning = true;
             this.complete = false;
             this.error = false;
@@ -235,10 +270,13 @@ function burnWorkflow() {
             this.events = [];
             
             const playlistName = this.getPlaylistName();
-            this.addEvent('info', `Starting burn for "${playlistName}"...`);
+            const discInfo = this.selectedDiscs.length === this.totalDiscs 
+                ? 'all discs' 
+                : `disc(s) ${this.selectedDiscs.join(', ')}`;
+            this.addEvent('info', `Starting burn for "${playlistName}" (${discInfo})...`);
 
             try {
-                // Start burn session
+                // Start burn session with selected discs
                 const response = await fetch('/api/burn/start', {
                     method: 'POST',
                     headers: {
@@ -247,7 +285,8 @@ function burnWorkflow() {
                     body: JSON.stringify({
                         playlist_id: playlistId,
                         playlist_name: playlistName,
-                        dry_run: this.dryRun
+                        dry_run: this.dryRun,
+                        selected_discs: this.selectedDiscs.length > 0 ? this.selectedDiscs : null
                     })
                 });
 
