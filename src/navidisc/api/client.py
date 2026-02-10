@@ -63,6 +63,7 @@ class SubsonicClient:
         self.client_name = client_name
         self._authenticated = False
         self._http_client: httpx.AsyncClient | None = None
+        self._navidrome_token: str | None = None  # Cached JWT token for native API
 
     @property
     def is_authenticated(self) -> bool:
@@ -161,11 +162,57 @@ class SubsonicClient:
         self._authenticated = True
         return True
 
+    async def _get_navidrome_token(self) -> str | None:
+        """Get a JWT token from Navidrome's native API.
+        
+        Navidrome's native API uses JWT tokens for authentication,
+        obtained by POSTing to /auth/login. Token is cached for reuse.
+        
+        Returns:
+            JWT token string, or None if auth fails.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Return cached token if available
+        if self._navidrome_token:
+            return self._navidrome_token
+        
+        try:
+            client = await self._get_client()
+            
+            url = f"{self.base_url}/auth/login"
+            payload = {
+                "username": self.username,
+                "password": self.password,
+            }
+            
+            logger.info(f"Getting Navidrome JWT token from {url}")
+            response = await client.post(url, json=payload)
+            
+            if response.status_code == 200:
+                data = response.json()
+                token = data.get("token")
+                if token:
+                    logger.info("Successfully obtained Navidrome JWT token")
+                    self._navidrome_token = token  # Cache for reuse
+                    return token
+                else:
+                    logger.warning(f"No token in response: {data}")
+            else:
+                logger.warning(f"Navidrome auth failed: {response.status_code} - {response.text[:200]}")
+                
+        except Exception as e:
+            logger.error(f"Failed to get Navidrome token: {e}")
+            
+        return None
+
     async def _fetch_navidrome_song_path(self, song_id: str) -> str | None:
         """Fetch the real file path from Navidrome's native API.
         
         Navidrome has a native REST API at /api/inspect that returns the actual
-        filesystem path, unlike the Subsonic API which returns a logical path.
+        filesystem path, unlike the Subsonic API which returns a simulated path
+        based on metadata (Artist/Album/Track format).
         
         Args:
             song_id: The song/track ID.
@@ -173,21 +220,21 @@ class SubsonicClient:
         Returns:
             The actual file path, or None if not available.
         """
-        import base64
         import logging
         logger = logging.getLogger(__name__)
         
         try:
             client = await self._get_client()
             
-            # Navidrome's native API uses basic auth
-            credentials = base64.b64encode(
-                f"{self.username}:{self.password}".encode()
-            ).decode()
+            # Get JWT token for Navidrome's native API
+            token = await self._get_navidrome_token()
+            if not token:
+                logger.warning("Could not get Navidrome token, cannot fetch real file path")
+                return None
             
             # Use the /api/inspect endpoint with id as query param
             url = f"{self.base_url}/api/inspect"
-            headers = {"Authorization": f"Basic {credentials}"}
+            headers = {"x-nd-authorization": f"Bearer {token}"}
             params = {"id": song_id}
             
             logger.info(f"Calling Navidrome API: {url}?id={song_id}")
