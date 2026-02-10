@@ -22,6 +22,7 @@ from navidisc.burner.drive import (
     DriveInfo,
     SpeedRecommendation,
     calculate_write_speed,
+    detect_blank_media,
     detect_drive_info,
 )
 from navidisc.models import BurnResult, BurnStatus, DiscType, MediaType, WriteSpeed
@@ -130,18 +131,9 @@ class BurnerAdapter(ABC):
         Returns:
             Tuple of (has_blank_media, status_message).
         """
-        drive_info = await detect_drive_info(device)
-        
-        if not drive_info:
-            return False, "Unable to detect drive"
-        
-        if not drive_info.current_media:
-            return False, "No media inserted"
-        
-        if not drive_info.media_writable:
-            return False, f"Media '{drive_info.current_media}' is not writable (already burned or non-recordable)"
-        
-        return True, f"Blank {drive_info.current_media} detected"
+        # Use udevadm-based detection which reliably reports media state
+        is_blank, media_type, status = await detect_blank_media(device)
+        return is_blank, status
     
     async def wait_for_blank_media(
         self,

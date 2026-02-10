@@ -230,6 +230,27 @@ def _parse_prcap_output(device: str, output: str) -> DriveInfo:
 
 async def _detect_with_udevadm(device: str) -> DriveInfo | None:
     """Detect drive info using udevadm."""
+    props = await _get_udevadm_properties(device)
+    if not props:
+        return None
+    
+    return DriveInfo(
+        device=device,
+        vendor=props.get("ID_VENDOR", "Unknown"),
+        model=props.get("ID_MODEL", "Unknown"),
+        can_write_cd=props.get("ID_CDROM_CD_R") == "1",
+        can_write_dvd=props.get("ID_CDROM_DVD_R") == "1" or props.get("ID_CDROM_DVD_PLUS_R") == "1",
+        can_write_bd=props.get("ID_CDROM_BD_R") == "1",
+        max_cd_write_speed=None,
+        max_dvd_write_speed=None,
+        max_bd_write_speed=None,
+        current_media=props.get("ID_CDROM_MEDIA"),
+        media_writable=props.get("ID_CDROM_MEDIA_STATE") == "blank",
+    )
+
+
+async def _get_udevadm_properties(device: str) -> dict[str, str] | None:
+    """Get udevadm properties for a device."""
     try:
         process = await asyncio.create_subprocess_exec(
             "udevadm", "info", "--query=property", f"--name={device}",
@@ -246,22 +267,41 @@ async def _detect_with_udevadm(device: str) -> DriveInfo | None:
             if "=" in line:
                 key, value = line.split("=", 1)
                 props[key] = value
-        
-        return DriveInfo(
-            device=device,
-            vendor=props.get("ID_VENDOR", "Unknown"),
-            model=props.get("ID_MODEL", "Unknown"),
-            can_write_cd=props.get("ID_CDROM_CD_R") == "1",
-            can_write_dvd=props.get("ID_CDROM_DVD_R") == "1" or props.get("ID_CDROM_DVD_PLUS_R") == "1",
-            can_write_bd=props.get("ID_CDROM_BD_R") == "1",
-            max_cd_write_speed=None,
-            max_dvd_write_speed=None,
-            max_bd_write_speed=None,
-            current_media=props.get("ID_CDROM_MEDIA"),
-            media_writable=props.get("ID_CDROM_MEDIA_STATE") == "blank",
-        )
+        return props
     except FileNotFoundError:
         return None
+
+
+async def detect_blank_media(device: str) -> tuple[bool, str | None, str]:
+    """Detect if blank/writable media is inserted.
+    
+    Uses udevadm which reliably reports media state.
+    
+    Args:
+        device: Device path (e.g., /dev/sr0).
+        
+    Returns:
+        Tuple of (is_blank, media_type, status_message).
+    """
+    props = await _get_udevadm_properties(device)
+    
+    if not props:
+        return False, None, "Unable to query device (udevadm not available)"
+    
+    media_type = props.get("ID_CDROM_MEDIA")
+    media_state = props.get("ID_CDROM_MEDIA_STATE")
+    
+    if not media_type:
+        return False, None, "No media inserted"
+    
+    if media_state == "blank":
+        return True, media_type, f"Blank {media_type} detected"
+    elif media_state == "complete":
+        return False, media_type, f"Media '{media_type}' already burned (complete)"
+    elif media_state == "appendable":
+        return False, media_type, f"Media '{media_type}' is appendable but not blank"
+    else:
+        return False, media_type, f"Media '{media_type}' state: {media_state or 'unknown'}"
 
 
 def calculate_write_speed(
