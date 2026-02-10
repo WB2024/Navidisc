@@ -190,20 +190,22 @@ class SubsonicClient:
             headers = {"Authorization": f"Basic {credentials}"}
             params = {"id": song_id}
             
+            logger.info(f"Calling Navidrome API: {url}?id={song_id}")
             response = await client.get(url, headers=headers, params=params)
+            logger.info(f"Navidrome API response status: {response.status_code}")
             
             if response.status_code == 200:
                 data = response.json()
                 # The file path is in the "file" field
                 real_path = data.get("file")
+                logger.info(f"Navidrome API returned file: {real_path}")
                 if real_path:
-                    logger.debug(f"Navidrome API returned file: {real_path}")
                     return real_path
             else:
-                logger.debug(f"Navidrome API returned {response.status_code} for song {song_id}")
+                logger.warning(f"Navidrome API returned {response.status_code} for song {song_id}: {response.text[:200]}")
                 
         except Exception as e:
-            logger.debug(f"Failed to fetch path from Navidrome API: {e}")
+            logger.error(f"Failed to fetch path from Navidrome API: {e}")
             
         return None
 
@@ -266,15 +268,17 @@ class SubsonicClient:
         
         # Try to fetch real file paths from Navidrome's native API
         # This is necessary because the Subsonic API returns a logical path, not the real filesystem path
-        logger.info(f"Fetching real file paths for {len(tracks)} tracks from Navidrome API...")
+        logger.info(f"=== Fetching real file paths for {len(tracks)} tracks from Navidrome API ===")
         
         for track in tracks:
             real_path = await self._fetch_navidrome_song_path(track.id)
             if real_path:
-                logger.debug(f"Track '{track.title}': updated path from '{track.path}' to '{real_path}'")
+                logger.info(f"Track '{track.title}': path updated '{track.path}' -> '{real_path}'")
                 track.path = real_path
             else:
-                logger.debug(f"Track '{track.title}': keeping Subsonic path '{track.path}'")
+                logger.warning(f"Track '{track.title}': NO PATH from Navidrome API, keeping '{track.path}'")
+        
+        logger.info(f"=== Finished fetching paths ===")
 
         return Playlist(
             id=str(playlist_data.get("id")),
