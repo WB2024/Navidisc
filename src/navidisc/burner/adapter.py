@@ -121,6 +121,81 @@ class BurnerAdapter(ABC):
         """
         pass
 
+    async def check_for_blank_media(self, device: str) -> tuple[bool, str]:
+        """Check if blank/writable media is currently inserted.
+        
+        Args:
+            device: Device path (e.g., /dev/sr0).
+            
+        Returns:
+            Tuple of (has_blank_media, status_message).
+        """
+        drive_info = await detect_drive_info(device)
+        
+        if not drive_info:
+            return False, "Unable to detect drive"
+        
+        if not drive_info.current_media:
+            return False, "No media inserted"
+        
+        if not drive_info.media_writable:
+            return False, f"Media '{drive_info.current_media}' is not writable (already burned or non-recordable)"
+        
+        return True, f"Blank {drive_info.current_media} detected"
+    
+    async def wait_for_blank_media(
+        self,
+        device: str,
+        poll_interval: float = 2.0,
+        timeout: float | None = None,
+        progress_callback: ProgressCallback | None = None,
+    ) -> tuple[bool, str]:
+        """Wait for blank/writable media to be inserted.
+        
+        Polls the device until blank media is detected or timeout is reached.
+        
+        Args:
+            device: Device path (e.g., /dev/sr0).
+            poll_interval: Seconds between checks.
+            timeout: Maximum seconds to wait (None = wait indefinitely).
+            progress_callback: Optional callback for status updates.
+            
+        Returns:
+            Tuple of (success, message).
+        """
+        import time
+        start_time = time.time()
+        last_status = ""
+        
+        while True:
+            has_blank, status = await self.check_for_blank_media(device)
+            
+            if has_blank:
+                logger.info(f"Blank media detected: {status}")
+                return True, status
+            
+            # Log status changes
+            if status != last_status:
+                logger.info(f"Waiting for blank disc: {status}")
+                last_status = status
+            
+            # Report progress
+            if progress_callback:
+                progress_callback(BurnProgress(
+                    disc_number=0,
+                    status="waiting",
+                    message=f"Insert blank disc: {status}",
+                ))
+            
+            # Check timeout
+            if timeout is not None:
+                elapsed = time.time() - start_time
+                if elapsed >= timeout:
+                    return False, f"Timeout waiting for blank media after {timeout}s"
+            
+            # Wait before next check
+            await asyncio.sleep(poll_interval)
+
     async def verify(
         self,
         device: str,

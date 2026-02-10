@@ -539,19 +539,50 @@ class Orchestrator:
             "device": self.config.burning.device,
         })
 
-        # Check device readiness
+        # First check device exists
         ready, message = await burner.check_device(self.config.burning.device)
-        logger.debug(f"Device ready check: ready={ready}, message={message}")
+        logger.debug(f"Device check: ready={ready}, message={message}")
         if not ready and not self.dry_run:
             self._add_error(
                 error_type="DeviceNotReady",
                 message=message,
-                suggested_action=f"Insert a blank disc into {self.config.burning.device}",
+                suggested_action=f"Ensure {self.config.burning.device} is connected",
                 recoverable=True,
             )
-            # Cannot proceed with burn if device isn't ready
             self._set_state(OrchestratorState.ERROR)
             return
+
+        # Wait for blank media to be inserted (poll indefinitely)
+        if not self.dry_run:
+            logger.info(f"Polling for blank media in {self.config.burning.device}...")
+            
+            def wait_progress(p):
+                self._emit(OrchestratorEvent.PROGRESS, {
+                    "step": "waiting_for_disc",
+                    "disc_number": disc_number,
+                    "message": p.message,
+                })
+            
+            has_blank, blank_status = await burner.wait_for_blank_media(
+                device=self.config.burning.device,
+                poll_interval=3.0,  # Check every 3 seconds
+                timeout=None,  # Wait indefinitely
+                progress_callback=wait_progress,
+            )
+            
+            logger.debug(f"Blank media check: has_blank={has_blank}, status={blank_status}")
+            
+            if not has_blank:
+                self._add_error(
+                    error_type="NoBlankMedia",
+                    message=blank_status,
+                    suggested_action=f"Insert a blank disc into {self.config.burning.device}",
+                    recoverable=True,
+                )
+                self._set_state(OrchestratorState.ERROR)
+                return
+            
+            logger.info(f"Blank media ready: {blank_status}")
 
         # Burn the disc
         self._set_state(OrchestratorState.BURNING_DISC)
