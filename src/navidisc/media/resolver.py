@@ -90,11 +90,12 @@ class MediaResolver:
         Returns:
             ResolvedTrack with resolution details.
         """
-        logger.debug(f"Resolving track: '{track.title}' | download_mode={self.download_mode.value} | library_paths={[str(p) for p in self.library_paths]} | track.path={track.path}")
+        # Use INFO level for key decisions to ensure visibility
+        logger.info(f"RESOLVE: '{track.title}' by {track.artist} | mode={self.download_mode.value} | libs={len(self.library_paths)} | track.path={track.path}")
 
         # Download-always mode: always use download
         if self.download_mode == DownloadMode.DOWNLOAD_ALWAYS:
-            logger.debug(f"  -> DOWNLOAD (mode=always)")
+            logger.info(f"  RESULT: DOWNLOAD (mode=always)")
             return ResolvedTrack(
                 track=track,
                 method=ResolveMethod.DOWNLOAD,
@@ -106,7 +107,7 @@ class MediaResolver:
         local_path = self._find_local_file(track)
 
         if local_path is not None:
-            logger.debug(f"  -> LOCAL: {local_path}")
+            logger.info(f"  RESULT: LOCAL -> {local_path}")
             return ResolvedTrack(
                 track=track,
                 method=ResolveMethod.LOCAL,
@@ -117,7 +118,7 @@ class MediaResolver:
 
         # Local-only mode: fail if not found locally
         if self.download_mode == DownloadMode.LOCAL_ONLY:
-            logger.warning(f"  -> NOT_FOUND (local-only mode, track.path={track.path})")
+            logger.warning(f"  RESULT: NOT_FOUND (local-only mode, track.path={track.path})")
             return ResolvedTrack(
                 track=track,
                 method=ResolveMethod.NOT_FOUND,
@@ -125,7 +126,7 @@ class MediaResolver:
             )
 
         # Download-if-missing mode: use download
-        logger.debug(f"  -> DOWNLOAD (not found locally)")
+        logger.info(f"  RESULT: DOWNLOAD (not found locally)")
         return ResolvedTrack(
             track=track,
             method=ResolveMethod.DOWNLOAD,
@@ -166,21 +167,19 @@ class MediaResolver:
             Path to local file if found, None otherwise.
         """
         if not self.library_paths:
-            logger.debug(f"No library paths configured, cannot find local file for: {track.title}")
+            logger.info(f"  No library paths configured")
             return None
 
         if not track.path:
-            logger.debug(f"Track has no path metadata: {track.title}")
+            logger.info(f"  Track has no path metadata")
             return None
 
-        logger.debug(f"Looking for local file: track.path={track.path}")
+        logger.info(f"  Searching: track.path='{track.path}'")
 
         # Common Navidrome Docker music folder prefixes to strip
         docker_prefixes = ['/music/', '/music', 'music/']
 
         for lib_path in self.library_paths:
-            logger.debug(f"Checking library path: {lib_path}")
-
             # Build list of candidate paths to check
             candidates = []
             track_path = track.path
@@ -190,14 +189,16 @@ class MediaResolver:
             for prefix in docker_prefixes:
                 if track_path.startswith(prefix):
                     relative_path = track_path[len(prefix):]
-                    logger.debug(f"  Stripped Docker prefix '{prefix}' -> {relative_path}")
+                    logger.info(f"  Stripped '{prefix}' -> '{relative_path}'")
                     break
             
             # Also try stripping leading slashes
             relative_path = relative_path.lstrip('/')
             
             # Primary candidate: library path + relative path (after stripping Docker prefix)
-            candidates.append(lib_path / relative_path)
+            primary_candidate = lib_path / relative_path
+            candidates.append(primary_candidate)
+            logger.info(f"  Trying: {primary_candidate}")
             
             # Also try the original path variations
             if track_path.startswith('/'):
@@ -209,10 +210,9 @@ class MediaResolver:
                 candidates.append(Path(track_path))
 
             for candidate in candidates:
-                logger.debug(f"  Trying candidate: {candidate}")
                 try:
                     if candidate.exists() and candidate.is_file():
-                        logger.info(f"Found local file: {candidate}")
+                        logger.info(f"  FOUND: {candidate}")
                         return candidate.resolve()
                 except (OSError, PermissionError) as e:
                     logger.debug(f"  Error checking {candidate}: {e}")
