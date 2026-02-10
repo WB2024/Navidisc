@@ -7,12 +7,15 @@ This module handles downloading track files with:
 """
 
 import hashlib
+import logging
 from collections.abc import Callable
 from pathlib import Path
 
 import httpx
 
 from navidisc.media.resolver import ResolvedTrack, ResolveMethod
+
+logger = logging.getLogger(__name__)
 
 
 class DownloadError(Exception):
@@ -128,16 +131,23 @@ class Downloader:
         # Ensure download directory exists
         self.download_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate filename
+        # Generate filename: "Artist - Album - Title.ext"
         track = resolved_track.track
         extension = track.format or "mp3"
         safe_title = self._sanitize_filename(track.title)
         safe_artist = self._sanitize_filename(track.artist)
-        filename = f"{safe_artist} - {safe_title}.{extension}"
+        safe_album = self._sanitize_filename(track.album or "Unknown Album")
+        filename = f"{safe_artist} - {safe_album} - {safe_title}.{extension}"
         output_path = self.download_dir / filename
+
+        # Skip if file already exists (same track already downloaded)
+        if output_path.exists():
+            logger.debug(f"Skipping download, file exists: {output_path}")
+            return output_path
 
         # Download the file
         client = await self._get_client()
+        logger.debug(f"Starting download: {track.title} -> {output_path}")
 
         try:
             async with client.stream("GET", resolved_track.download_url) as response:
@@ -160,7 +170,11 @@ class Downloader:
                         progress.downloaded_bytes += len(chunk)
 
                         if progress_callback:
-                            progress_callback(progress)
+                            try:
+                                progress_callback(progress)
+                            except Exception:
+                                # Don't let progress callback errors kill the download
+                                pass
 
         except httpx.HTTPStatusError as e:
             raise DownloadError(
@@ -169,9 +183,25 @@ class Downloader:
             )
         except httpx.RequestError as e:
             raise DownloadError(f"Request failed: {e}", track.id)
+        except httpx.StreamError as e:
+            # Streaming errors (e.g., connection closed mid-download)
+            raise DownloadError(f"Stream error during download: {e}", track.id)
         except OSError as e:
             raise DownloadError(f"Failed to write file: {e}", track.id)
+        except GeneratorExit:
+            # HTTP client was closed during streaming - this typically means
+            # an error occurred elsewhere and cleanup is in progress
+            logger.warning(f"Download interrupted by client closure: {track.id}")
+            raise DownloadError(
+                "Download interrupted: connection was closed",
+                track.id,
+            )
+        except Exception as e:
+            # Log unexpected errors for debugging before converting to DownloadError
+            logger.exception(f"Unexpected error downloading track {track.id}: {e}")
+            raise DownloadError(f"Unexpected download error: {e}", track.id)
 
+        logger.debug(f"Download complete: {track.title} ({output_path.stat().st_size} bytes)")
         return output_path
 
     async def download_many(
