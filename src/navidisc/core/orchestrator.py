@@ -122,7 +122,7 @@ class Orchestrator:
         self._playlist: Playlist | None = None
         self._resolved_tracks: list[ResolvedTrack] | None = None
         self._track_paths: dict[str, Path] = {}
-        self._staged_discs: list = []
+        self._staged_discs: dict[int, Any] = {}  # keyed by disc number
 
         # Event handling
         self._event_callback: EventCallback | None = None
@@ -587,7 +587,7 @@ class Orchestrator:
         track_lookup = {t.id: t for t in self._playlist.tracks}
 
         staged = staging.stage_disc(disc_plan, self._track_paths, track_lookup)
-        self._staged_discs.append(staged)
+        self._staged_discs[disc_number] = staged  # key by disc number, not append
         logger.debug(f"Staged {len(staged.files)} files to {staged.directory}")
 
         self._emit(OrchestratorEvent.PROGRESS, {
@@ -599,7 +599,7 @@ class Orchestrator:
     async def _step_burn_disc(self, disc_number: int) -> None:
         """Burn a disc."""
         burner = self._get_burner()
-        staged = self._staged_discs[disc_number - 1]
+        staged = self._staged_discs[disc_number]  # use disc number directly as key
         plan = self.session.burn_plan
 
         # Wait for disc insertion
@@ -731,7 +731,8 @@ class Orchestrator:
         self._event_callback = event_handler
 
         await self._step_authenticate()
-        await self._step_resolve_playlist(playlist_name, playlist_id)
+        await self._step_fetch_playlist(playlist_name, playlist_id)
+        await self._step_resolve_all_tracks()
         await self._step_plan()
 
         return self.session.burn_plan
