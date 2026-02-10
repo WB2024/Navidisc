@@ -261,6 +261,66 @@
             </div>
         </div>
 
+        <!-- Local Library Settings -->
+        <div class="bg-white dark:bg-surface-800 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
+            <div class="px-6 py-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800/50">
+                <div class="flex items-center">
+                    <svg class="h-5 w-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                    </svg>
+                    <h2 class="ml-3 text-lg font-semibold text-surface-900 dark:text-white">
+                        Local Library Access
+                    </h2>
+                </div>
+            </div>
+            <div class="px-6 py-6 space-y-6">
+                <!-- Local Library Path -->
+                <div>
+                    <label for="local_library_path" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                        Local Music Library Path
+                    </label>
+                    <input type="text" name="local_library_path" id="local_library_path"
+                           value="{{ config.media.local_library_path or '' if config else '' }}"
+                           placeholder="/path/to/navidrome/music or leave empty for remote"
+                           class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
+                                  bg-white dark:bg-surface-700 text-surface-900 dark:text-white
+                                  shadow-sm focus:border-primary-500 focus:ring-primary-500 
+                                  px-3 py-2 border">
+                    <p class="mt-1 text-xs text-surface-500 dark:text-surface-400">
+                        If Navidrome runs on the same machine, set this to your music library path
+                        (same as Navidrome's MusicFolder). Files will be read directly instead of downloading.
+                    </p>
+                </div>
+
+                <!-- Download Mode -->
+                <div>
+                    <label for="download_mode" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                        File Access Mode
+                    </label>
+                    <select name="download_mode" 
+                            id="download_mode"
+                            class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
+                                   bg-white dark:bg-surface-700 text-surface-900 dark:text-white
+                                   shadow-sm focus:border-primary-500 focus:ring-primary-500 
+                                   px-3 py-2 border">
+                        <option value="local-only" {% if config and config.media.download_mode.value == 'local-only' %}selected{% endif %}>
+                            Local Only – Use files from local library path (no downloads)
+                        </option>
+                        <option value="download-if-missing" {% if not config or config.media.download_mode.value == 'download-if-missing' %}selected{% endif %}>
+                            Prefer Local – Use local files when available, download missing
+                        </option>
+                        <option value="download-always" {% if config and config.media.download_mode.value == 'download-always' %}selected{% endif %}>
+                            Always Download – Download all files from server
+                        </option>
+                    </select>
+                    <p class="mt-1 text-xs text-surface-500 dark:text-surface-400">
+                        "Local Only" requires a local library path. "Prefer Local" is best when library is sometimes accessible.
+                    </p>
+                </div>
+            </div>
+        </div>
+
         <!-- Audio Conversion Settings -->
         <div class="bg-white dark:bg-surface-800 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
             <div class="px-6 py-4 border-b border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800/50">

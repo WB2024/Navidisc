@@ -181,8 +181,13 @@ class Orchestrator:
     def _get_resolver(self) -> MediaResolver:
         """Get or create the media resolver."""
         if self._resolver is None:
+            # Use local library path if configured
+            library_paths = []
+            if self.config.media.local_library_path:
+                library_paths.append(self.config.media.local_library_path)
+            
             self._resolver = MediaResolver(
-                library_paths=[],  # Could add config for local library paths
+                library_paths=library_paths,
                 download_mode=self.config.media.download_mode,
             )
         return self._resolver

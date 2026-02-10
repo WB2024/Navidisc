@@ -4,6 +4,7 @@ import asyncio
 import json
 import uuid
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -18,7 +19,7 @@ from navidisc.config import (
 )
 from navidisc.core import Orchestrator, OrchestratorEvent
 from navidisc.media.converter import estimate_mp3_size
-from navidisc.models import ConversionQuality, DiscType, MediaType, WriteSpeed
+from navidisc.models import ConversionQuality, DiscType, DownloadMode, MediaType, WriteSpeed
 from navidisc.planner import DiscPlanningEngine
 
 router = APIRouter()
@@ -267,6 +268,8 @@ async def save_configuration(request: Request):
         write_speed = form.get("write_speed", "auto")
         conversion_quality = form.get("conversion_quality", "disabled")
         auto_cleanup = form.get("auto_cleanup") == "true"
+        local_library_path = form.get("local_library_path", "").strip() or None
+        download_mode = form.get("download_mode", "download-if-missing")
         
         # Validate required fields
         if not navidrome_url or not navidrome_username or not navidrome_password:
@@ -307,6 +310,8 @@ async def save_configuration(request: Request):
                 write_speed=WriteSpeed(write_speed),
             ),
             media=MediaConfig(
+                local_library_path=Path(local_library_path) if local_library_path else None,
+                download_mode=DownloadMode(download_mode),
                 conversion_quality=ConversionQuality(conversion_quality),
                 auto_cleanup=auto_cleanup,
             ),

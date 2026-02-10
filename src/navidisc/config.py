@@ -69,6 +69,10 @@ class MediaConfig(BaseModel):
         default=Path("/tmp/navidisc"),
         description="Directory for staging files before burning"
     )
+    local_library_path: Path | None = Field(
+        default=None,
+        description="Path to local Navidrome music library (skip downloads when set)"
+    )
     download_mode: DownloadMode = Field(
         default=DownloadMode.DOWNLOAD_IF_MISSING,
         description="How to obtain track files"
