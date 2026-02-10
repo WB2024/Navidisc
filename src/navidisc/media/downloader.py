@@ -76,7 +76,8 @@ class Downloader:
         self,
         download_dir: Path,
         chunk_size: int = 8192,
-        timeout: float = 60.0,
+        timeout: float = 300.0,  # 5 minutes for large files
+        max_retries: int = 3,
     ):
         """Initialize the downloader.
 
@@ -84,20 +85,31 @@ class Downloader:
             download_dir: Directory to save downloaded files.
             chunk_size: Size of download chunks in bytes.
             timeout: HTTP timeout in seconds.
+            max_retries: Maximum number of retry attempts for failed downloads.
         """
         self.download_dir = download_dir
         self.chunk_size = chunk_size
         self.timeout = timeout
+        self.max_retries = max_retries
         self._http_client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._http_client is None:
             self._http_client = httpx.AsyncClient(
-                timeout=httpx.Timeout(self.timeout, connect=10.0),
+                timeout=httpx.Timeout(self.timeout, connect=30.0, read=self.timeout),
                 follow_redirects=True,
             )
         return self._http_client
+    
+    async def _reset_client(self) -> None:
+        """Reset the HTTP client (for retry attempts)."""
+        if self._http_client:
+            try:
+                await self._http_client.aclose()
+            except Exception:
+                pass
+            self._http_client = None
 
     async def download(
         self,
@@ -145,64 +157,88 @@ class Downloader:
             logger.debug(f"Skipping download, file exists: {output_path}")
             return output_path
 
-        # Download the file
-        client = await self._get_client()
-        logger.debug(f"Starting download: {track.title} -> {output_path}")
+        # Download the file with retry logic
+        last_error: Exception | None = None
+        
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                # Get or reset client for each attempt
+                if attempt > 1:
+                    logger.info(f"Retry attempt {attempt}/{self.max_retries} for: {track.title}")
+                    await self._reset_client()
+                    # Clean up partial download
+                    if output_path.exists():
+                        output_path.unlink()
+                
+                client = await self._get_client()
+                logger.debug(f"Starting download: {track.title} -> {output_path}")
 
-        try:
-            async with client.stream("GET", resolved_track.download_url) as response:
-                response.raise_for_status()
+                async with client.stream("GET", resolved_track.download_url) as response:
+                    response.raise_for_status()
 
-                # Get total size from headers if available
-                total_size = response.headers.get("content-length")
-                total_bytes = int(total_size) if total_size else resolved_track.size_bytes
+                    # Get total size from headers if available
+                    total_size = response.headers.get("content-length")
+                    total_bytes = int(total_size) if total_size else resolved_track.size_bytes
 
-                progress = DownloadProgress(
-                    track_id=track.id,
-                    filename=filename,
-                    total_bytes=total_bytes,
+                    progress = DownloadProgress(
+                        track_id=track.id,
+                        filename=filename,
+                        total_bytes=total_bytes,
+                    )
+
+                    # Write to file
+                    with open(output_path, "wb") as f:
+                        async for chunk in response.aiter_bytes(self.chunk_size):
+                            f.write(chunk)
+                            progress.downloaded_bytes += len(chunk)
+
+                            if progress_callback:
+                                try:
+                                    progress_callback(progress)
+                                except Exception:
+                                    # Don't let progress callback errors kill the download
+                                    pass
+
+                # Verify download completed
+                if output_path.exists() and output_path.stat().st_size > 0:
+                    logger.debug(f"Download complete: {track.title} ({output_path.stat().st_size} bytes)")
+                    return output_path
+                else:
+                    raise DownloadError("Download resulted in empty or missing file", track.id)
+
+            except httpx.HTTPStatusError as e:
+                last_error = DownloadError(
+                    f"HTTP error {e.response.status_code}: {e.response.reason_phrase}",
+                    track.id,
                 )
+                logger.warning(f"Download failed (attempt {attempt}): {last_error}")
+            except httpx.RequestError as e:
+                last_error = DownloadError(f"Request failed: {e}", track.id)
+                logger.warning(f"Download failed (attempt {attempt}): {last_error}")
+            except httpx.StreamError as e:
+                # Streaming errors (e.g., connection closed mid-download)
+                last_error = DownloadError(f"Stream error during download: {e}", track.id)
+                logger.warning(f"Download failed (attempt {attempt}): {last_error}")
+            except OSError as e:
+                last_error = DownloadError(f"Failed to write file: {e}", track.id)
+                logger.warning(f"Download failed (attempt {attempt}): {last_error}")
+            except GeneratorExit:
+                # HTTP client was closed during streaming - this typically means
+                # the SSE connection was closed or orchestrator is shutting down
+                # Don't retry on GeneratorExit - it means we're being cancelled
+                logger.warning(f"Download interrupted by cancellation: {track.id}")
+                raise DownloadError(
+                    "Download interrupted: connection was closed",
+                    track.id,
+                )
+            except Exception as e:
+                # Log unexpected errors for debugging before converting to DownloadError
+                logger.exception(f"Unexpected error downloading track {track.id}: {e}")
+                last_error = DownloadError(f"Unexpected download error: {e}", track.id)
 
-                # Write to file
-                with open(output_path, "wb") as f:
-                    async for chunk in response.aiter_bytes(self.chunk_size):
-                        f.write(chunk)
-                        progress.downloaded_bytes += len(chunk)
-
-                        if progress_callback:
-                            try:
-                                progress_callback(progress)
-                            except Exception:
-                                # Don't let progress callback errors kill the download
-                                pass
-
-        except httpx.HTTPStatusError as e:
-            raise DownloadError(
-                f"HTTP error {e.response.status_code}: {e.response.reason_phrase}",
-                track.id,
-            )
-        except httpx.RequestError as e:
-            raise DownloadError(f"Request failed: {e}", track.id)
-        except httpx.StreamError as e:
-            # Streaming errors (e.g., connection closed mid-download)
-            raise DownloadError(f"Stream error during download: {e}", track.id)
-        except OSError as e:
-            raise DownloadError(f"Failed to write file: {e}", track.id)
-        except GeneratorExit:
-            # HTTP client was closed during streaming - this typically means
-            # an error occurred elsewhere and cleanup is in progress
-            logger.warning(f"Download interrupted by client closure: {track.id}")
-            raise DownloadError(
-                "Download interrupted: connection was closed",
-                track.id,
-            )
-        except Exception as e:
-            # Log unexpected errors for debugging before converting to DownloadError
-            logger.exception(f"Unexpected error downloading track {track.id}: {e}")
-            raise DownloadError(f"Unexpected download error: {e}", track.id)
-
-        logger.debug(f"Download complete: {track.title} ({output_path.stat().st_size} bytes)")
-        return output_path
+        # All retries exhausted
+        logger.error(f"Download failed after {self.max_retries} attempts: {track.title}")
+        raise last_error or DownloadError("Download failed after all retries", track.id)
 
     async def download_many(
         self,
