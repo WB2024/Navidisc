@@ -260,29 +260,101 @@
                 </div>
 
                 <!-- Disc Size -->
-                <div>
-                    <label for="disc_size_mb" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
-                        Disc Size (MB)
+                <div x-data="{ 
+                    discSize: '{{ config.burning.disc_size_mb if config else 700 }}',
+                    customSize: '{{ config.burning.disc_size_mb if config else 700 }}',
+                    isCustom: false,
+                    init() {
+                        const knownSizes = ['185', '210', '300', '650', '680', '700', '703', '800', '870', '1400', '2800', '3950', '4700', '5200', '8500', '9400', '17000', '7800', '15600', '25000', '27000', '50000', '100000', '128000'];
+                        this.isCustom = !knownSizes.includes(this.discSize);
+                        if (this.isCustom) {
+                            this.customSize = this.discSize;
+                            this.discSize = 'custom';
+                        }
+                    }
+                }">
+                    <label for="disc_size_select" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                        Disc Capacity
                     </label>
-                    <select name="disc_size_mb" 
-                            id="disc_size_mb"
+                    <select id="disc_size_select"
+                            x-model="discSize"
+                            @change="isCustom = (discSize === 'custom')"
                             class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
                                    bg-white dark:bg-surface-700 text-surface-900 dark:text-white
                                    shadow-sm focus:border-primary-500 focus:ring-primary-500 
                                    px-3 py-2 border">
-                        <option value="700" {% if config and config.burning.disc_size_mb == 700 %}selected{% endif %}>
-                            CD - 700 MB
-                        </option>
-                        <option value="4700" {% if config and config.burning.disc_size_mb == 4700 %}selected{% endif %}>
-                            DVD - 4.7 GB
-                        </option>
-                        <option value="8500" {% if config and config.burning.disc_size_mb == 8500 %}selected{% endif %}>
-                            DVD DL - 8.5 GB
-                        </option>
-                        <option value="25000" {% if config and config.burning.disc_size_mb == 25000 %}selected{% endif %}>
-                            Blu-ray - 25 GB
-                        </option>
+                        
+                        <optgroup label="CD - Standard (12 cm)">
+                            <option value="650">CD 650 MB (74 min) - Original standard</option>
+                            <option value="680">CD 680 MB (77 min) - Transitional</option>
+                            <option value="700">CD 700 MB (80 min) - Most common</option>
+                            <option value="703">CD 703 MB (80 min) - Slight overburn</option>
+                            <option value="800">CD 800 MB (90 min) - Extended</option>
+                            <option value="870">CD 870 MB (99 min) - Maximum standard</option>
+                        </optgroup>
+                        
+                        <optgroup label="CD - Mini (8 cm)">
+                            <option value="185">Mini CD 185 MB (21 min)</option>
+                            <option value="210">Mini CD 210 MB (24 min)</option>
+                            <option value="300">Mini CD 300 MB (34 min) - Rare</option>
+                        </optgroup>
+                        
+                        <optgroup label="DVD - Standard (12 cm)">
+                            <option value="3950">DVD 3.95 GB - Early DVD-R 1.0</option>
+                            <option value="4700">DVD 4.7 GB - Single layer (most common)</option>
+                            <option value="5200">DVD-RAM 5.2 GB - Double-sided SL</option>
+                            <option value="8500">DVD 8.5 GB - Dual layer (DL)</option>
+                            <option value="9400">DVD 9.4 GB - Double-sided SL</option>
+                            <option value="17000">DVD 17 GB - Double-sided DL (rare)</option>
+                        </optgroup>
+                        
+                        <optgroup label="DVD - Mini (8 cm)">
+                            <option value="1400">Mini DVD 1.4 GB - Single layer</option>
+                            <option value="2800">Mini DVD 2.8 GB - Dual layer</option>
+                        </optgroup>
+                        
+                        <optgroup label="Blu-ray - Standard (12 cm)">
+                            <option value="25000">BD 25 GB - Single layer</option>
+                            <option value="27000">BD 27 GB - Early prototype</option>
+                            <option value="50000">BD 50 GB - Dual layer (most common)</option>
+                            <option value="100000">BDXL 100 GB - Triple layer</option>
+                            <option value="128000">BDXL 128 GB - Quad layer (maximum)</option>
+                        </optgroup>
+                        
+                        <optgroup label="Blu-ray - Mini (8 cm)">
+                            <option value="7800">Mini BD 7.8 GB - Single layer</option>
+                            <option value="15600">Mini BD 15.6 GB - Dual layer</option>
+                        </optgroup>
+                        
+                        <optgroup label="Custom">
+                            <option value="custom">Custom size...</option>
+                        </optgroup>
                     </select>
+                    
+                    <!-- Custom size input -->
+                    <div x-show="isCustom" x-transition class="mt-2">
+                        <label for="custom_disc_size" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
+                            Custom Size (MB)
+                        </label>
+                        <input type="number" 
+                               id="custom_disc_size"
+                               x-model="customSize"
+                               min="30"
+                               max="200000"
+                               placeholder="Enter size in MB"
+                               class="mt-1 block w-full rounded-md border-surface-300 dark:border-surface-600 
+                                      bg-white dark:bg-surface-700 text-surface-900 dark:text-white
+                                      shadow-sm focus:border-primary-500 focus:ring-primary-500 
+                                      px-3 py-2 border">
+                        <p class="mt-1 text-xs text-surface-500 dark:text-surface-400">
+                            Enter capacity in megabytes (e.g., 650 for a 650 MB CD)
+                        </p>
+                    </div>
+                    
+                    <!-- Hidden input that sends the actual value -->
+                    <input type="hidden" 
+                           name="disc_size_mb" 
+                           :value="isCustom ? customSize : discSize">
                 </div>
                 
                 <!-- Media Type -->

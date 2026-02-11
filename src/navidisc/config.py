@@ -47,7 +47,7 @@ class BurningConfig(BaseModel):
     def default_write_speed(cls, v: object) -> object:
         """Treat None as AUTO for backward compatibility."""
         return v if v is not None else "auto"
-    disc_size_mb: int = Field(default=700, ge=100, le=30000, description="Disc capacity in MB")
+    disc_size_mb: int = Field(default=700, ge=30, le=200000, description="Disc capacity in MB")
     audio_disc_minutes: int = Field(default=80, ge=20, le=100, description="Audio CD capacity in minutes")
     verify_after_burn: bool = Field(default=True, description="Verify disc after burning")
     eject_after_burn: bool = Field(default=True, description="Eject disc after burning")
