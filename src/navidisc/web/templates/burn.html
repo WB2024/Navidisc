@@ -112,7 +112,7 @@
             <div>
                 <div class="flex justify-between text-sm mb-1">
                     <span class="text-surface-600 dark:text-surface-300" x-text="currentStatus"></span>
-                    <span class="text-surface-500 dark:text-surface-400" x-text="progress + '%'"></span>
+                    <span class="text-surface-500 dark:text-surface-400" x-text="Math.round(progress) + '%'"></span>
                 </div>
                 <div class="w-full bg-surface-200 dark:bg-surface-700 rounded-full h-2">
                     <div class="bg-primary-600 h-2 rounded-full progress-bar" 

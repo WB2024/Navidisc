@@ -32,6 +32,7 @@ from navidisc.models import (
     OrchestratorState,
     Playlist,
     SessionState,
+    StagedDisc,
 )
 from navidisc.planner import DiscPlanningEngine
 from navidisc.staging import StagingManager
@@ -751,6 +752,16 @@ class Orchestrator:
             self._set_state(OrchestratorState.VERIFYING)
             # Basic verification would go here
 
+        # Export track list if burn was successful
+        if result.status == BurnStatus.SUCCESS:
+            track_list_path = self._export_track_list(disc_number, staged)
+            if track_list_path:
+                self._emit(OrchestratorEvent.PROGRESS, {
+                    "step": "track_list_exported",
+                    "disc_number": disc_number,
+                    "message": f"Track list exported to {track_list_path.name}",
+                })
+
         # Eject if enabled
         if self.config.burning.eject_after_burn:
             logger.debug(f"Ejecting disc from {self.config.burning.device}")
@@ -794,6 +805,79 @@ class Orchestrator:
         await self._step_plan()
 
         return self.session.burn_plan
+
+    # =========================================================================
+    # Track List Export
+    # =========================================================================
+
+    def _export_track_list(self, disc_number: int, staged: StagedDisc) -> Path | None:
+        """Export track list for a burned disc.
+        
+        Creates a text file with the actual track list that was burned,
+        based on the staged files (not the burn plan, which may differ).
+        
+        Args:
+            disc_number: Disc number that was burned.
+            staged: StagedDisc containing the actual files burned.
+            
+        Returns:
+            Path to the exported file, or None if export failed.
+        """
+        if not self._playlist:
+            logger.warning("Cannot export track list: no playlist loaded")
+            return None
+        
+        # Build track lookup
+        track_lookup = {t.id: t for t in self._playlist.tracks}
+        
+        # Sanitize playlist name for filename
+        safe_name = self._sanitize_filename(self._playlist.name)
+        filename = f"{safe_name} - Disc {disc_number:02d}.txt"
+        
+        # Write to staging directory
+        output_path = self.config.media.staging_dir / filename
+        
+        try:
+            lines = []
+            lines.append(f"{self._playlist.name} - Disc {disc_number}")
+            lines.append("=" * len(lines[0]))
+            lines.append("")
+            
+            for idx, staged_file in enumerate(staged.files, start=1):
+                track = track_lookup.get(staged_file.track_id)
+                if track:
+                    lines.append(f"{idx:02d}. {track.title} - {track.artist}")
+                else:
+                    # Fallback to filename if track not found
+                    lines.append(f"{idx:02d}. {staged_file.filename}")
+            
+            lines.append("")
+            lines.append(f"Total tracks: {len(staged.files)}")
+            
+            output_path.write_text("\n".join(lines), encoding="utf-8")
+            logger.info(f"Exported track list to {output_path}")
+            
+            return output_path
+            
+        except Exception as e:
+            logger.error(f"Failed to export track list: {e}")
+            return None
+    
+    def _sanitize_filename(self, name: str) -> str:
+        """Sanitize a string for use as a filename.
+        
+        Removes or replaces characters that are invalid in filenames.
+        """
+        # Replace invalid characters with underscores
+        invalid_chars = '<>:"/\\|?*'
+        result = name
+        for char in invalid_chars:
+            result = result.replace(char, '_')
+        # Collapse multiple underscores
+        while '__' in result:
+            result = result.replace('__', '_')
+        # Strip leading/trailing whitespace and underscores
+        return result.strip(' _')
 
     # =========================================================================
     # Cleanup
