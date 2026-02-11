@@ -4,14 +4,19 @@ This module handles audio conversion using ffmpeg with:
 - Quality presets (best, high, medium, small)
 - Progress reporting
 - Metadata preservation
+- Accurate duration probing via ffprobe
 """
 
 import asyncio
+import json
+import logging
 import shutil
 from collections.abc import Callable
 from pathlib import Path
 
 from navidisc.models import ConversionQuality
+
+logger = logging.getLogger(__name__)
 
 
 class ConversionError(Exception):
@@ -80,16 +85,150 @@ def get_quality_description(quality: ConversionQuality) -> str:
     return preset["description"] if preset else "Unknown"
 
 
-def estimate_mp3_size(duration_seconds: int, quality: ConversionQuality) -> int:
-    """Estimate the MP3 file size after conversion.
+def check_ffprobe_available() -> bool:
+    """Check if ffprobe is available on the system."""
+    return shutil.which("ffprobe") is not None
 
-    Uses the target CBR bitrate to calculate expected size.
-    Adds ~2% overhead for MP3 framing, ID3 tags, etc.
 
+async def ffprobe_duration(file_path: Path) -> float | None:
+    """Get the actual audio duration of a file using ffprobe.
+    
+    This is more accurate than relying on API metadata, which can be wrong.
+    
+    Args:
+        file_path: Path to the audio file.
+        
+    Returns:
+        Duration in seconds (as float for precision), or None if probe fails.
+    """
+    if not file_path.exists():
+        logger.warning(f"ffprobe: File does not exist: {file_path}")
+        return None
+    
+    if not check_ffprobe_available():
+        logger.warning("ffprobe not available, cannot get accurate duration")
+        return None
+    
+    cmd = [
+        "ffprobe",
+        "-v", "quiet",
+        "-print_format", "json",
+        "-show_format",
+        str(file_path),
+    ]
+    
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode != 0:
+            logger.warning(f"ffprobe failed for {file_path.name}: {stderr.decode()}")
+            return None
+        
+        data = json.loads(stdout.decode())
+        duration_str = data.get("format", {}).get("duration")
+        
+        if duration_str:
+            duration = float(duration_str)
+            logger.debug(f"ffprobe: {file_path.name} duration = {duration:.2f}s")
+            return duration
+        else:
+            logger.warning(f"ffprobe: No duration found for {file_path.name}")
+            return None
+            
+    except json.JSONDecodeError as e:
+        logger.warning(f"ffprobe: Invalid JSON response for {file_path.name}: {e}")
+        return None
+    except Exception as e:
+        logger.warning(f"ffprobe failed for {file_path.name}: {e}")
+        return None
+
+
+def ffprobe_duration_sync(file_path: Path) -> float | None:
+    """Synchronous wrapper for ffprobe_duration.
+    
+    Uses subprocess.run instead of asyncio for use in sync contexts.
+    """
+    import subprocess
+    
+    if not file_path.exists():
+        return None
+    
+    if not check_ffprobe_available():
+        return None
+    
+    cmd = [
+        "ffprobe",
+        "-v", "quiet",
+        "-print_format", "json",
+        "-show_format",
+        str(file_path),
+    ]
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            return None
+        
+        data = json.loads(result.stdout)
+        duration_str = data.get("format", {}).get("duration")
+        return float(duration_str) if duration_str else None
+    except Exception:
+        return None
+
+
+async def estimate_mp3_size_from_file(
+    file_path: Path,
+    quality: ConversionQuality,
+    fallback_duration_seconds: int | None = None,
+) -> int:
+    """Estimate MP3 size by probing the actual file duration.
+    
+    This is more accurate than estimate_mp3_size() because it uses
+    ffprobe to get the real duration instead of trusting API metadata.
+    
+    Args:
+        file_path: Path to the source audio file.
+        quality: Quality preset for conversion.
+        fallback_duration_seconds: Duration to use if ffprobe fails.
+        
+    Returns:
+        Estimated file size in bytes.
+    """
+    if quality == ConversionQuality.DISABLED:
+        # Return actual file size if no conversion
+        if file_path.exists():
+            return file_path.stat().st_size
+        return 0
+    
+    # Try to get actual duration via ffprobe
+    duration = await ffprobe_duration(file_path)
+    
+    if duration is None and fallback_duration_seconds:
+        logger.debug(f"Using fallback duration {fallback_duration_seconds}s for {file_path.name}")
+        duration = float(fallback_duration_seconds)
+    
+    if duration is None:
+        logger.warning(f"Cannot estimate size for {file_path.name}: no duration available")
+        # Return original file size as very rough fallback
+        if file_path.exists():
+            return file_path.stat().st_size
+        return 0
+    
+    return _calculate_mp3_size(duration, quality)
+
+
+def _calculate_mp3_size(duration_seconds: float, quality: ConversionQuality) -> int:
+    """Calculate MP3 file size from duration and quality.
+    
     Args:
         duration_seconds: Track duration in seconds.
-        quality: Quality preset to estimate for.
-
+        quality: Quality preset.
+        
     Returns:
         Estimated file size in bytes.
     """
@@ -100,15 +239,49 @@ def estimate_mp3_size(duration_seconds: int, quality: ConversionQuality) -> int:
     if not preset:
         return 0
 
-    # Parse bitrate string like "320k" -> 320000
+    # Parse bitrate string like "320k" -> 320000 bits per second
     bitrate_str = preset["bitrate"]
     bitrate_bps = int(bitrate_str.replace("k", "")) * 1000
 
     # Size = (bitrate in bits/sec * duration in sec) / 8 bits per byte
-    raw_size = (bitrate_bps * duration_seconds) // 8
+    raw_size = (bitrate_bps * duration_seconds) / 8
 
-    # Add ~2% overhead for MP3 framing and ID3 tags
-    return int(raw_size * 1.02)
+    # Add ~5% overhead for MP3 framing, ID3 tags, and padding
+    # (2% was too conservative based on real-world testing)
+    estimated = int(raw_size * 1.05)
+    
+    logger.debug(
+        f"MP3 size estimate: {duration_seconds:.1f}s @ {bitrate_str} = "
+        f"{estimated} bytes ({estimated / 1024 / 1024:.2f} MB)"
+    )
+    
+    return estimated
+
+
+def estimate_mp3_size(duration_seconds: int, quality: ConversionQuality) -> int:
+    """Estimate the MP3 file size after conversion based on duration.
+    
+    WARNING: This uses the provided duration which may come from API metadata
+    that can be inaccurate. For local files, use estimate_mp3_size_from_file()
+    which probes the actual file duration via ffprobe.
+
+    Args:
+        duration_seconds: Track duration in seconds (from API metadata).
+        quality: Quality preset to estimate for.
+
+    Returns:
+        Estimated file size in bytes.
+    """
+    if quality == ConversionQuality.DISABLED:
+        return 0
+    
+    # Log a warning about potential inaccuracy
+    logger.debug(
+        f"estimate_mp3_size: Using API duration {duration_seconds}s - "
+        "this may be inaccurate. Consider using estimate_mp3_size_from_file() for local files."
+    )
+    
+    return _calculate_mp3_size(float(duration_seconds), quality)
 
 
 def check_ffmpeg_available() -> bool:

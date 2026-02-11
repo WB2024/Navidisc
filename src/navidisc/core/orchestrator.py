@@ -22,7 +22,7 @@ from navidisc.api import SubsonicClient
 from navidisc.burner import BurnerAdapter, detect_backend
 from navidisc.config import NavidiscConfig
 from navidisc.media import AudioConverter, Downloader, MediaResolver, ResolvedTrack
-from navidisc.media.converter import estimate_mp3_size
+from navidisc.media.converter import estimate_mp3_size, estimate_mp3_size_from_file
 from navidisc.media.resolver import ResolveMethod
 from navidisc.models import (
     BurnPlan,
@@ -511,47 +511,65 @@ class Orchestrator:
     async def _step_plan(self) -> None:
         """Create the disc burn plan using accurate sizes.
         
-        Uses actual file sizes for local files, and estimates conversion sizes
-        based on track duration when conversion is enabled.
+        For local files that need conversion, uses ffprobe to get the actual
+        audio duration for accurate size estimation. This avoids relying on
+        potentially inaccurate API metadata.
         """
         planner = self._get_planner()
         converter = self._get_converter()
         conversion_quality = self.config.media.conversion_quality
         
         logger.info("Creating burn plan...")
+        logger.info(f"Conversion quality: {conversion_quality.value}")
 
         self._emit(OrchestratorEvent.PROGRESS, {
             "step": "planning",
-            "message": "Creating disc plan...",
+            "message": "Calculating accurate file sizes...",
         })
 
-        # Build size lookup with accurate/estimated sizes
+        # Build size lookup with accurate sizes using ffprobe when possible
         size_lookup = {}
-        for rt in self._resolved_tracks:
+        total_tracks = len(self._resolved_tracks)
+        
+        for idx, rt in enumerate(self._resolved_tracks, 1):
             track = rt.track
             
             if rt.method == ResolveMethod.LOCAL and rt.local_path:
-                # Local file - check if conversion will change the size
+                # Local file - use ffprobe for accurate sizing
                 if converter and converter.needs_conversion(rt.local_path):
-                    # File will be converted - estimate post-conversion size
-                    if track.duration_seconds:
-                        estimated_size = estimate_mp3_size(track.duration_seconds, conversion_quality)
-                        size_lookup[track.id] = estimated_size
-                        logger.debug(f"Track '{track.title}': {rt.size_bytes} -> ~{estimated_size} (estimated MP3)")
-                    else:
-                        # No duration info, use original size as fallback
-                        size_lookup[track.id] = rt.size_bytes or track.size_bytes or 0
+                    # File will be converted - get accurate size using ffprobe
+                    logger.debug(f"[{idx}/{total_tracks}] Probing '{track.title}' for accurate duration...")
+                    estimated_size = await estimate_mp3_size_from_file(
+                        rt.local_path,
+                        conversion_quality,
+                        fallback_duration_seconds=track.duration_seconds,
+                    )
+                    size_lookup[track.id] = estimated_size
+                    logger.info(
+                        f"Track '{track.title}': {rt.size_bytes or 0} bytes source -> "
+                        f"~{estimated_size} bytes after conversion ({estimated_size / 1024 / 1024:.2f} MB)"
+                    )
                 else:
                     # No conversion needed - use actual file size
-                    size_lookup[track.id] = rt.size_bytes or track.size_bytes or 0
+                    actual_size = rt.size_bytes or track.size_bytes or 0
+                    size_lookup[track.id] = actual_size
+                    logger.debug(f"Track '{track.title}': {actual_size} bytes (no conversion)")
             else:
-                # Download track - estimate based on conversion if enabled
+                # Download track - must use API duration estimate (no local file yet)
                 if converter and conversion_quality != ConversionQuality.DISABLED and track.duration_seconds:
                     estimated_size = estimate_mp3_size(track.duration_seconds, conversion_quality)
                     size_lookup[track.id] = estimated_size
+                    logger.debug(
+                        f"Track '{track.title}': ~{estimated_size} bytes (estimated from API duration {track.duration_seconds}s)"
+                    )
                 else:
                     # Use API-reported size
                     size_lookup[track.id] = track.size_bytes or 0
+                    logger.debug(f"Track '{track.title}': {track.size_bytes or 0} bytes (from API)")
+
+        # Log total sizes for debugging
+        total_size = sum(size_lookup.values())
+        logger.info(f"Total planned size: {total_size} bytes ({total_size / 1024 / 1024:.2f} MB)")
 
         plan = planner.plan(self._playlist, size_lookup)
         self.session.burn_plan = plan

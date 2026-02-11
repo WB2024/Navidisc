@@ -383,15 +383,30 @@ class SubsonicClient:
             if key in data:
                 logger.info(f"Track '{title}' {key}: {data[key]}")
         
+        # Log duration specifically for debugging size estimation issues
+        raw_duration = data.get("duration", 0)
+        raw_size = data.get("size", 0)
+        logger.debug(
+            f"Track '{title}': API duration={raw_duration}s ({raw_duration // 60}m {raw_duration % 60}s), "
+            f"size={raw_size} bytes, bitrate={data.get('bitRate')}kbps, format={data.get('suffix')}"
+        )
+        
+        # Sanity check: if duration seems unreasonable (> 1 hour), log a warning
+        if raw_duration > 3600:
+            logger.warning(
+                f"Track '{title}' has unusually long duration: {raw_duration}s ({raw_duration / 60:.1f} min). "
+                "This may indicate corrupted metadata."
+            )
+        
         return Track(
             id=track_id,
             title=title,
             artist=data.get("artist", "Unknown Artist"),
             album=data.get("album"),
             track_number=data.get("track"),
-            duration_seconds=data.get("duration", 0),
+            duration_seconds=raw_duration,
             bitrate=data.get("bitRate"),
-            size_bytes=data.get("size"),
+            size_bytes=raw_size,
             format=data.get("suffix"),
             path=path,
             stream_url=self._build_stream_url(track_id),

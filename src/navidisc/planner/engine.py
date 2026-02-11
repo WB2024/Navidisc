@@ -7,10 +7,13 @@ This module provides:
 - Serializable, deterministic output
 """
 
+import logging
 from datetime import datetime
 from enum import StrEnum
 
 from navidisc.models import BurnPlan, DiscPlan, DiscType, Playlist, Track
+
+logger = logging.getLogger(__name__)
 
 
 class PlanningStrategy(StrEnum):
@@ -143,14 +146,33 @@ class DiscPlanningEngine:
         Returns:
             List of DiscPlan objects.
         """
+        logger.debug("=" * 60)
+        logger.debug("PLANNER: GREEDY SEQUENTIAL PLANNING")
+        logger.debug("=" * 60)
+        logger.debug(f"Total tracks: {len(tracks)}")
+        logger.debug(f"Disc type: {self.disc_type}")
+        if self.disc_capacity_bytes:
+            logger.debug(f"Disc capacity: {self.disc_capacity_bytes} bytes ({self.disc_capacity_bytes / 1024 / 1024:.2f} MB)")
+        if self.disc_capacity_seconds:
+            logger.debug(f"Disc capacity: {self.disc_capacity_seconds} seconds ({self.disc_capacity_seconds // 60} min)")
+        logger.debug("=" * 60)
+        
         discs: list[DiscPlan] = []
         current_disc_tracks: list[str] = []
         current_size = 0
         current_duration = 0
+        current_disc_num = 1
 
-        for track in tracks:
+        for idx, track in enumerate(tracks, 1):
             track_size = size_lookup.get(track.id) or track.size_bytes or 0
             track_duration = track.duration_seconds
+            
+            # Detailed logging for each track
+            logger.debug(
+                f"Track {idx}: '{track.title}' - "
+                f"size={track_size} bytes ({track_size / 1024 / 1024:.2f} MB), "
+                f"duration={track_duration}s"
+            )
 
             # Check if track fits on current disc
             fits = self._track_fits(
@@ -162,6 +184,10 @@ class DiscPlanningEngine:
 
             if not fits and current_disc_tracks:
                 # Start a new disc
+                logger.info(
+                    f"Disc {current_disc_num} full: {len(current_disc_tracks)} tracks, "
+                    f"{current_size / 1024 / 1024:.2f} MB, {current_duration}s"
+                )
                 discs.append(DiscPlan(
                     disc_number=len(discs) + 1,
                     track_ids=current_disc_tracks,
@@ -171,9 +197,15 @@ class DiscPlanningEngine:
                 current_disc_tracks = []
                 current_size = 0
                 current_duration = 0
+                current_disc_num += 1
 
             # Check if single track exceeds disc capacity
             if not self._track_fits(0, 0, track_size, track_duration):
+                logger.error(
+                    f"Track '{track.title}' exceeds disc capacity! "
+                    f"Track: {track_size / 1024 / 1024:.2f} MB, "
+                    f"Capacity: {self.disc_capacity_bytes / 1024 / 1024:.2f} MB"
+                )
                 raise PlanningError(
                     f"Track '{track.title}' exceeds disc capacity "
                     f"({self._format_capacity(track_size, track_duration)})"
@@ -183,9 +215,17 @@ class DiscPlanningEngine:
             current_disc_tracks.append(track.id)
             current_size += track_size
             current_duration += track_duration
+            
+            if self.disc_capacity_bytes:
+                pct_used = (current_size / self.disc_capacity_bytes) * 100
+                logger.debug(f"  -> Added to disc {current_disc_num}, now at {pct_used:.1f}% capacity")
 
         # Add final disc
         if current_disc_tracks:
+            logger.info(
+                f"Disc {current_disc_num} (final): {len(current_disc_tracks)} tracks, "
+                f"{current_size / 1024 / 1024:.2f} MB, {current_duration}s"
+            )
             discs.append(DiscPlan(
                 disc_number=len(discs) + 1,
                 track_ids=current_disc_tracks,
@@ -193,6 +233,10 @@ class DiscPlanningEngine:
                 total_duration_seconds=current_duration,
             ))
 
+        logger.debug("=" * 60)
+        logger.info(f"Planning complete: {len(discs)} disc(s) required")
+        logger.debug("=" * 60)
+        
         return discs
 
     def _track_fits(

@@ -8,6 +8,10 @@ from navidisc.media.converter import (
     ConversionError,
     ConversionProgress,
     check_ffmpeg_available,
+    check_ffprobe_available,
+    estimate_mp3_size,
+    estimate_mp3_size_from_file,
+    ffprobe_duration,
     get_quality_description,
 )
 from navidisc.media.downloader import Downloader
@@ -18,6 +22,10 @@ __all__ = [
     "ConversionError",
     "ConversionProgress",
     "check_ffmpeg_available",
+    "check_ffprobe_available",
+    "estimate_mp3_size",
+    "estimate_mp3_size_from_file",
+    "ffprobe_duration",
     "get_quality_description",
     "Downloader",
     "MediaResolver",
