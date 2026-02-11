@@ -29,18 +29,26 @@ def make_playlist(tracks: list[Track]) -> Playlist:
     )
 
 
+# Calculate effective capacity for tests
+# Raw 700 MB - 15% ISO overhead - 10 MB safety = ~585 MB effective
+RAW_CAPACITY_MB = 700
+ISO_OVERHEAD_PERCENT = 0.15
+SAFETY_MARGIN_MB = 10
+EFFECTIVE_CAPACITY_MB = int(RAW_CAPACITY_MB * (1 - ISO_OVERHEAD_PERCENT) - SAFETY_MARGIN_MB)  # ~585 MB
+
+
 class TestDiscPlanningEngine:
     """Tests for DiscPlanningEngine."""
     
     def test_single_disc_fits(self):
         """Test that tracks fitting on one disc create a single-disc plan."""
-        # Create 10 tracks of 50MB each = 500MB (fits on 700MB disc)
+        # Create 10 tracks of 50MB each = 500MB (fits on ~585MB effective capacity)
         tracks = [make_track(f"track-{i}", size_mb=50) for i in range(10)]
         playlist = make_playlist(tracks)
         
         engine = DiscPlanningEngine(
             disc_type=DiscType.DATA,
-            disc_capacity_bytes=700 * 1024 * 1024,
+            disc_capacity_bytes=RAW_CAPACITY_MB * 1024 * 1024,
         )
         
         plan = engine.plan(playlist)
@@ -51,22 +59,23 @@ class TestDiscPlanningEngine:
     
     def test_multiple_discs_required(self):
         """Test that large playlists are split across multiple discs."""
-        # Create 20 tracks of 50MB each = 1000MB (needs 2 discs)
+        # Create 20 tracks of 50MB each = 1000MB
+        # With ~585MB effective capacity: ~11 tracks per disc
         tracks = [make_track(f"track-{i}", size_mb=50) for i in range(20)]
         playlist = make_playlist(tracks)
         
         engine = DiscPlanningEngine(
             disc_type=DiscType.DATA,
-            disc_capacity_bytes=700 * 1024 * 1024,
+            disc_capacity_bytes=RAW_CAPACITY_MB * 1024 * 1024,
         )
         
         plan = engine.plan(playlist)
         
         assert plan.total_discs == 2
-        # First disc should have 14 tracks (700MB / 50MB = 14)
-        assert plan.discs[0].track_count == 14
-        # Second disc should have remaining 6 tracks
-        assert plan.discs[1].track_count == 6
+        # First disc should have 11 tracks (585MB / 50MB = 11.7 -> 11)
+        assert plan.discs[0].track_count == 11
+        # Second disc should have remaining 9 tracks
+        assert plan.discs[1].track_count == 9
     
     def test_audio_disc_planning(self):
         """Test planning for audio CDs based on duration."""
@@ -89,12 +98,13 @@ class TestDiscPlanningEngine:
     
     def test_track_order_preserved(self):
         """Test that track order is preserved across discs."""
+        # Use 100MB tracks, ~5 fit per disc with 585MB effective capacity
         tracks = [make_track(f"track-{i:03d}", size_mb=100) for i in range(10)]
         playlist = make_playlist(tracks)
         
         engine = DiscPlanningEngine(
             disc_type=DiscType.DATA,
-            disc_capacity_bytes=700 * 1024 * 1024,
+            disc_capacity_bytes=RAW_CAPACITY_MB * 1024 * 1024,
         )
         
         plan = engine.plan(playlist)
@@ -121,12 +131,13 @@ class TestDiscPlanningEngine:
     
     def test_oversized_track_raises_error(self):
         """Test that a track larger than disc capacity raises an error."""
-        tracks = [make_track("huge-track", size_mb=800)]  # 800MB > 700MB
+        # 600MB track exceeds ~585MB effective capacity
+        tracks = [make_track("huge-track", size_mb=600)]
         playlist = make_playlist(tracks)
         
         engine = DiscPlanningEngine(
             disc_type=DiscType.DATA,
-            disc_capacity_bytes=700 * 1024 * 1024,
+            disc_capacity_bytes=RAW_CAPACITY_MB * 1024 * 1024,
         )
         
         with pytest.raises(Exception) as exc_info:
@@ -141,7 +152,7 @@ class TestDiscPlanningEngine:
         
         engine = DiscPlanningEngine(
             disc_type=DiscType.DATA,
-            disc_capacity_bytes=700 * 1024 * 1024,
+            disc_capacity_bytes=RAW_CAPACITY_MB * 1024 * 1024,
         )
         
         plan = engine.plan(playlist)
@@ -162,13 +173,14 @@ class TestEstimateDiscs:
         """Test estimation for data discs."""
         engine = DiscPlanningEngine(
             disc_type=DiscType.DATA,
-            disc_capacity_bytes=700 * 1024 * 1024,
+            disc_capacity_bytes=RAW_CAPACITY_MB * 1024 * 1024,
         )
         
-        # 1.5 GB should need 3 discs (rounded up)
+        # With ~585MB effective capacity:
+        # 1.5 GB (1536 MB) should need 3 discs (1536 / 585 = 2.6 -> 3)
         assert engine.estimate_discs(total_size_bytes=int(1.5 * 1024**3)) == 3
         
-        # 500 MB should need 1 disc
+        # 500 MB should need 1 disc (fits in 585MB)
         assert engine.estimate_discs(total_size_bytes=500 * 1024**2) == 1
     
     def test_estimate_audio_discs(self):

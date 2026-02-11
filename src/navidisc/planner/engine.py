@@ -48,6 +48,13 @@ class DiscPlanningEngine:
     # Default capacities
     DEFAULT_DATA_CD_BYTES = 700 * 1024 * 1024  # 700 MB
     DEFAULT_AUDIO_CD_SECONDS = 80 * 60  # 80 minutes
+    
+    # ISO9660 filesystem overhead settings
+    # ISO overhead includes: volume descriptors, path tables, directory records,
+    # Rock Ridge extensions (~200 bytes/file), Joliet extensions, sector padding
+    # Real-world testing shows 10-20% overhead depending on file count/names
+    ISO_OVERHEAD_PERCENT = 0.15  # 15% overhead for ISO9660 + Rock Ridge + Joliet
+    SAFETY_MARGIN_BYTES = 10 * 1024 * 1024  # 10 MB safety margin
 
     def __init__(
         self,
@@ -69,11 +76,46 @@ class DiscPlanningEngine:
 
         # Set capacities based on disc type
         if disc_type == DiscType.DATA:
-            self.disc_capacity_bytes = disc_capacity_bytes or self.DEFAULT_DATA_CD_BYTES
+            raw_capacity = disc_capacity_bytes or self.DEFAULT_DATA_CD_BYTES
+            # Calculate effective capacity accounting for ISO overhead and safety margin
+            self._raw_capacity_bytes = raw_capacity
+            self.disc_capacity_bytes = self._calculate_effective_capacity(raw_capacity)
             self.disc_capacity_seconds = None
         else:
+            self._raw_capacity_bytes = None
             self.disc_capacity_bytes = None
             self.disc_capacity_seconds = disc_capacity_seconds or self.DEFAULT_AUDIO_CD_SECONDS
+    
+    def _calculate_effective_capacity(self, raw_capacity: int) -> int:
+        """Calculate effective usable capacity after accounting for filesystem overhead.
+        
+        ISO9660 filesystems with Rock Ridge and Joliet extensions add significant
+        overhead that must be accounted for in planning. This includes:
+        - Volume descriptors and path tables
+        - Directory records for each file
+        - Rock Ridge POSIX extensions (~200 bytes per file)
+        - Joliet Unicode filename support
+        - 2048-byte sector alignment padding
+        
+        Args:
+            raw_capacity: Raw disc capacity in bytes.
+            
+        Returns:
+            Effective capacity available for file data.
+        """
+        # Subtract ISO overhead percentage
+        after_overhead = int(raw_capacity * (1 - self.ISO_OVERHEAD_PERCENT))
+        # Subtract safety margin
+        effective = after_overhead - self.SAFETY_MARGIN_BYTES
+        
+        logger.info(
+            f"Disc capacity calculation: {raw_capacity / 1024 / 1024:.0f} MB raw "
+            f"- {self.ISO_OVERHEAD_PERCENT * 100:.0f}% ISO overhead "
+            f"- {self.SAFETY_MARGIN_BYTES / 1024 / 1024:.0f} MB safety margin "
+            f"= {effective / 1024 / 1024:.0f} MB effective"
+        )
+        
+        return effective
 
     def plan(
         self,
@@ -152,7 +194,15 @@ class DiscPlanningEngine:
         logger.debug(f"Total tracks: {len(tracks)}")
         logger.debug(f"Disc type: {self.disc_type}")
         if self.disc_capacity_bytes:
-            logger.debug(f"Disc capacity: {self.disc_capacity_bytes} bytes ({self.disc_capacity_bytes / 1024 / 1024:.2f} MB)")
+            if self._raw_capacity_bytes:
+                logger.info(
+                    f"Disc capacity: {self._raw_capacity_bytes / 1024 / 1024:.0f} MB raw -> "
+                    f"{self.disc_capacity_bytes / 1024 / 1024:.0f} MB effective "
+                    f"(after {self.ISO_OVERHEAD_PERCENT * 100:.0f}% ISO overhead + "
+                    f"{self.SAFETY_MARGIN_BYTES / 1024 / 1024:.0f} MB safety margin)"
+                )
+            else:
+                logger.debug(f"Disc capacity: {self.disc_capacity_bytes / 1024 / 1024:.0f} MB")
         if self.disc_capacity_seconds:
             logger.debug(f"Disc capacity: {self.disc_capacity_seconds} seconds ({self.disc_capacity_seconds // 60} min)")
         logger.debug("=" * 60)
@@ -184,10 +234,19 @@ class DiscPlanningEngine:
 
             if not fits and current_disc_tracks:
                 # Start a new disc
-                logger.info(
-                    f"Disc {current_disc_num} full: {len(current_disc_tracks)} tracks, "
-                    f"{current_size / 1024 / 1024:.2f} MB, {current_duration}s"
-                )
+                if self.disc_capacity_bytes:
+                    pct_used = (current_size / self.disc_capacity_bytes) * 100
+                    remaining_mb = (self.disc_capacity_bytes - current_size) / 1024 / 1024
+                    logger.info(
+                        f"Disc {current_disc_num} full: {len(current_disc_tracks)} tracks, "
+                        f"{current_size / 1024 / 1024:.1f} MB ({pct_used:.1f}% capacity, "
+                        f"{remaining_mb:.1f} MB unused)"
+                    )
+                else:
+                    logger.info(
+                        f"Disc {current_disc_num} full: {len(current_disc_tracks)} tracks, "
+                        f"{current_size / 1024 / 1024:.2f} MB, {current_duration}s"
+                    )
                 discs.append(DiscPlan(
                     disc_number=len(discs) + 1,
                     track_ids=current_disc_tracks,
@@ -201,10 +260,12 @@ class DiscPlanningEngine:
 
             # Check if single track exceeds disc capacity
             if not self._track_fits(0, 0, track_size, track_duration):
+                effective_mb = self.disc_capacity_bytes / 1024 / 1024 if self.disc_capacity_bytes else 0
+                raw_mb = self._raw_capacity_bytes / 1024 / 1024 if self._raw_capacity_bytes else effective_mb
                 logger.error(
                     f"Track '{track.title}' exceeds disc capacity! "
                     f"Track: {track_size / 1024 / 1024:.2f} MB, "
-                    f"Capacity: {self.disc_capacity_bytes / 1024 / 1024:.2f} MB"
+                    f"Effective capacity: {effective_mb:.0f} MB (raw: {raw_mb:.0f} MB)"
                 )
                 raise PlanningError(
                     f"Track '{track.title}' exceeds disc capacity "
@@ -218,14 +279,27 @@ class DiscPlanningEngine:
             
             if self.disc_capacity_bytes:
                 pct_used = (current_size / self.disc_capacity_bytes) * 100
-                logger.debug(f"  -> Added to disc {current_disc_num}, now at {pct_used:.1f}% capacity")
+                remaining_mb = (self.disc_capacity_bytes - current_size) / 1024 / 1024
+                logger.debug(
+                    f"  -> Added to disc {current_disc_num}, now at {pct_used:.1f}% "
+                    f"({current_size / 1024 / 1024:.1f} MB, {remaining_mb:.1f} MB remaining)"
+                )
 
         # Add final disc
         if current_disc_tracks:
-            logger.info(
-                f"Disc {current_disc_num} (final): {len(current_disc_tracks)} tracks, "
-                f"{current_size / 1024 / 1024:.2f} MB, {current_duration}s"
-            )
+            if self.disc_capacity_bytes:
+                pct_used = (current_size / self.disc_capacity_bytes) * 100
+                remaining_mb = (self.disc_capacity_bytes - current_size) / 1024 / 1024
+                logger.info(
+                    f"Disc {current_disc_num} (final): {len(current_disc_tracks)} tracks, "
+                    f"{current_size / 1024 / 1024:.1f} MB ({pct_used:.1f}% of effective capacity, "
+                    f"{remaining_mb:.1f} MB headroom)"
+                )
+            else:
+                logger.info(
+                    f"Disc {current_disc_num} (final): {len(current_disc_tracks)} tracks, "
+                    f"{current_size / 1024 / 1024:.2f} MB, {current_duration}s"
+                )
             discs.append(DiscPlan(
                 disc_number=len(discs) + 1,
                 track_ids=current_disc_tracks,
