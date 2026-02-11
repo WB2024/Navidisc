@@ -445,6 +445,8 @@ def web(
 
     console = Console(quiet=quiet)
     console.info(f"Starting Navidisc web interface at http://{host}:{port}")
+    if verbose:
+        console.info("Verbose mode enabled - DEBUG level logging active")
     console.info("Press Ctrl+C to stop")
 
     uvicorn.run(
@@ -453,7 +455,7 @@ def web(
         port=port,
         reload=reload,
         factory=True,
-        log_level="info" if verbose else "warning",
+        log_level="debug" if verbose else "warning",
     )
 
 

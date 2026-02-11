@@ -321,6 +321,50 @@ class GrowIsofsBackend(BurnerAdapter):
                 custom_speed=self.custom_speed,
             )
 
+        # === DETAILED DEBUG LOGGING ===
+        logger.debug("=" * 60)
+        logger.debug("GROWISOFS BURN - DEBUG INFO")
+        logger.debug("=" * 60)
+        logger.debug(f"Disc path: {disc_path}")
+        logger.debug(f"Device: {device}")
+        logger.debug(f"Disc number: {disc_number}")
+        logger.debug(f"Media type setting: {self.media_type}")
+        logger.debug(f"Write speed preset: {self.write_speed_preset}")
+        logger.debug(f"Custom speed: {self.custom_speed}")
+        
+        if self._drive_info:
+            logger.debug(f"Drive info:")
+            logger.debug(f"  Vendor: {self._drive_info.vendor}")
+            logger.debug(f"  Model: {self._drive_info.model}")
+            logger.debug(f"  Can write CD: {self._drive_info.can_write_cd}")
+            logger.debug(f"  Can write DVD: {self._drive_info.can_write_dvd}")
+            logger.debug(f"  Can write BD: {self._drive_info.can_write_bd}")
+            logger.debug(f"  Current media: {self._drive_info.current_media}")
+            logger.debug(f"  Media writable: {self._drive_info.media_writable}")
+        else:
+            logger.debug("Drive info: NOT DETECTED")
+        
+        if self._speed_recommendation:
+            logger.debug(f"Speed recommendation:")
+            logger.debug(f"  Speed X: {self._speed_recommendation.speed_x}")
+            logger.debug(f"  Speed KB/s: {self._speed_recommendation.speed_kbps}")
+            logger.debug(f"  Reason: {self._speed_recommendation.reason}")
+            logger.debug(f"  Is estimated: {self._speed_recommendation.is_estimated}")
+        else:
+            logger.debug("Speed recommendation: NOT SET")
+        
+        # List files to be burned
+        if disc_path.exists() and disc_path.is_dir():
+            files = list(disc_path.iterdir())
+            logger.debug(f"Files to burn ({len(files)} total):")
+            for f in files[:20]:  # First 20 files
+                logger.debug(f"  - {f.name} ({f.stat().st_size} bytes)")
+            if len(files) > 20:
+                logger.debug(f"  ... and {len(files) - 20} more files")
+        else:
+            logger.warning(f"Disc path does not exist or is not a directory: {disc_path}")
+        logger.debug("=" * 60)
+
         if progress_callback:
             progress_callback(BurnProgress(
                 disc_number=disc_number,
@@ -343,7 +387,8 @@ class GrowIsofsBackend(BurnerAdapter):
 
         cmd.append(str(disc_path))
         
-        logger.info(f"Executing: {' '.join(cmd)}")
+        logger.info(f"Executing burn command: {' '.join(cmd)}")
+        logger.debug(f"Full command list: {cmd}")
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -362,6 +407,10 @@ class GrowIsofsBackend(BurnerAdapter):
 
                 line_text = line.decode().strip()
                 output_lines.append(line_text)
+                
+                # Log each line of output in real-time for debugging
+                if line_text:
+                    logger.debug(f"[growisofs] {line_text}")
 
                 # Parse progress from growisofs output
                 if progress_callback and "%" in line_text:
@@ -385,9 +434,20 @@ class GrowIsofsBackend(BurnerAdapter):
             completed_at = datetime.now()
             output_text = "\n".join(output_lines)
             
-            logger.debug(f"growisofs exited with code {process.returncode}")
+            # === DETAILED POST-BURN DEBUG LOGGING ===
+            logger.debug("=" * 60)
+            logger.debug("GROWISOFS BURN - COMPLETED")
+            logger.debug("=" * 60)
+            logger.info(f"growisofs exit code: {process.returncode}")
+            logger.debug(f"Burn duration: {completed_at - started_at}")
+            logger.debug(f"Output lines count: {len(output_lines)}")
             if output_text:
-                logger.debug(f"growisofs output:\n{output_text}")
+                logger.debug(f"Full growisofs output:")
+                for line in output_lines:
+                    logger.debug(f"  > {line}")
+            else:
+                logger.warning("No output captured from growisofs")
+            logger.debug("=" * 60)
 
             if process.returncode == 0:
                 if progress_callback:
@@ -534,6 +594,49 @@ class WodimBackend(BurnerAdapter):
                 custom_speed=self.custom_speed,
             )
 
+        # === DETAILED DEBUG LOGGING ===
+        logger.debug("=" * 60)
+        logger.debug("WODIM/CDRECORD BURN - DEBUG INFO")
+        logger.debug("=" * 60)
+        logger.debug(f"Disc path: {disc_path}")
+        logger.debug(f"Device: {device}")
+        logger.debug(f"Disc number: {disc_number}")
+        logger.debug(f"Media type setting: {self.media_type}")
+        logger.debug(f"Write speed preset: {self.write_speed_preset}")
+        logger.debug(f"Custom speed: {self.custom_speed}")
+        
+        if self._drive_info:
+            logger.debug(f"Drive info:")
+            logger.debug(f"  Vendor: {self._drive_info.vendor}")
+            logger.debug(f"  Model: {self._drive_info.model}")
+            logger.debug(f"  Can write CD: {self._drive_info.can_write_cd}")
+            logger.debug(f"  Can write DVD: {self._drive_info.can_write_dvd}")
+            logger.debug(f"  Current media: {self._drive_info.current_media}")
+            logger.debug(f"  Media writable: {self._drive_info.media_writable}")
+        else:
+            logger.debug("Drive info: NOT DETECTED")
+        
+        if self._speed_recommendation:
+            logger.debug(f"Speed recommendation:")
+            logger.debug(f"  Speed X: {self._speed_recommendation.speed_x}")
+            logger.debug(f"  Speed KB/s: {self._speed_recommendation.speed_kbps}")
+            logger.debug(f"  Reason: {self._speed_recommendation.reason}")
+            logger.debug(f"  Is estimated: {self._speed_recommendation.is_estimated}")
+        else:
+            logger.debug("Speed recommendation: NOT SET")
+        
+        # List files to be burned
+        if disc_path.exists() and disc_path.is_dir():
+            files = list(disc_path.iterdir())
+            logger.debug(f"Files to burn ({len(files)} total):")
+            for f in files[:20]:  # First 20 files
+                logger.debug(f"  - {f.name} ({f.stat().st_size} bytes)")
+            if len(files) > 20:
+                logger.debug(f"  ... and {len(files) - 20} more files")
+        else:
+            logger.warning(f"Disc path does not exist or is not a directory: {disc_path}")
+        logger.debug("=" * 60)
+
         if progress_callback:
             progress_callback(BurnProgress(
                 disc_number=disc_number,
@@ -566,6 +669,7 @@ class WodimBackend(BurnerAdapter):
             ])
 
             logger.info(f"Creating ISO: {' '.join(iso_cmd)}")
+            logger.debug(f"ISO output path: {iso_path}")
 
             # Create ISO
             iso_process = await asyncio.create_subprocess_exec(
@@ -574,6 +678,12 @@ class WodimBackend(BurnerAdapter):
                 stderr=asyncio.subprocess.PIPE,
             )
             iso_stdout, iso_stderr = await iso_process.communicate()
+
+            logger.debug(f"ISO creation exit code: {iso_process.returncode}")
+            if iso_stdout:
+                logger.debug(f"ISO stdout: {iso_stdout.decode()}")
+            if iso_stderr:
+                logger.debug(f"ISO stderr: {iso_stderr.decode()}")
 
             if iso_process.returncode != 0:
                 return BurnResult(
@@ -599,7 +709,13 @@ class WodimBackend(BurnerAdapter):
                 str(iso_path),  # ISO file to burn
             ])
 
-            logger.info(f"Executing: {' '.join(burn_cmd)}")
+            logger.info(f"Executing burn command: {' '.join(burn_cmd)}")
+            logger.debug(f"Full command list: {burn_cmd}")
+            
+            # Log ISO file size
+            if iso_path.exists():
+                iso_size = iso_path.stat().st_size
+                logger.debug(f"ISO file size: {iso_size} bytes ({iso_size / 1024 / 1024:.2f} MB)")
 
             # Execute burn
             burn_process = await asyncio.create_subprocess_exec(
@@ -618,6 +734,10 @@ class WodimBackend(BurnerAdapter):
 
                 line_text = line.decode().strip()
                 output_lines.append(line_text)
+                
+                # Log each line of output in real-time for debugging
+                if line_text:
+                    logger.debug(f"[{cmd_name}] {line_text}")
 
                 # Parse progress from wodim output
                 if progress_callback and "%" in line_text:
@@ -644,12 +764,24 @@ class WodimBackend(BurnerAdapter):
             # Clean up ISO file
             try:
                 iso_path.unlink()
-            except Exception:
-                pass
+                logger.debug(f"Cleaned up ISO file: {iso_path}")
+            except Exception as cleanup_err:
+                logger.warning(f"Failed to clean up ISO file: {cleanup_err}")
 
-            logger.debug(f"{cmd_name} exited with code {burn_process.returncode}")
+            # === DETAILED POST-BURN DEBUG LOGGING ===
+            logger.debug("=" * 60)
+            logger.debug("WODIM/CDRECORD BURN - COMPLETED")
+            logger.debug("=" * 60)
+            logger.info(f"{cmd_name} exit code: {burn_process.returncode}")
+            logger.debug(f"Burn duration: {completed_at - started_at}")
+            logger.debug(f"Output lines count: {len(output_lines)}")
             if output_text:
-                logger.debug(f"{cmd_name} output:\n{output_text}")
+                logger.debug(f"Full {cmd_name} output:")
+                for line in output_lines:
+                    logger.debug(f"  > {line}")
+            else:
+                logger.warning(f"No output captured from {cmd_name}")
+            logger.debug("=" * 60)
 
             if burn_process.returncode == 0:
                 if progress_callback:

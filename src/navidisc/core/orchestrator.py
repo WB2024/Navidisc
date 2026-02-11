@@ -602,6 +602,30 @@ class Orchestrator:
         staged = self._staged_discs[disc_number]  # use disc number directly as key
         plan = self.session.burn_plan
 
+        # === DETAILED DEBUG INFO ABOUT THE BURN ===
+        logger.debug("=" * 60)
+        logger.debug("ORCHESTRATOR: BURN DISC DEBUG INFO")
+        logger.debug("=" * 60)
+        logger.debug(f"Session ID: {self.session.session_id}")
+        logger.debug(f"Disc number: {disc_number} of {plan.total_discs}")
+        logger.debug(f"Device: {self.config.burning.device}")
+        logger.debug(f"Disc type: {self.config.burning.disc_type}")
+        logger.debug(f"Media type: {self.config.burning.media_type}")
+        logger.debug(f"Write speed: {self.config.burning.write_speed}")
+        logger.debug(f"Dry run: {self.dry_run}")
+        logger.debug(f"Burner backend: {burner.name}")
+        logger.debug(f"Staged directory: {staged.directory}")
+        logger.debug(f"Staged files count: {len(staged.files)}")
+        if staged.files:
+            logger.debug(f"Staged files (first 10):")
+            for f in staged.files[:10]:
+                logger.debug(f"  - {f}")
+            if len(staged.files) > 10:
+                logger.debug(f"  ... and {len(staged.files) - 10} more files")
+        logger.debug(f"Verify after burn: {self.config.burning.verify_after_burn}")
+        logger.debug(f"Eject after burn: {self.config.burning.eject_after_burn}")
+        logger.debug("=" * 60)
+
         # Wait for disc insertion
         self._set_state(OrchestratorState.WAIT_FOR_DISC)
         logger.info(f"Waiting for disc {disc_number} to be inserted into {self.config.burning.device}")
@@ -682,11 +706,27 @@ class Orchestrator:
         )
 
         self.session.burn_results.append(result)
-        logger.info(f"Burn completed: disc {disc_number}, status={result.status}")
+        
+        # === DETAILED POST-BURN DEBUG LOGGING ===
+        logger.debug("=" * 60)
+        logger.debug("ORCHESTRATOR: BURN RESULT DEBUG INFO")
+        logger.debug("=" * 60)
+        logger.info(f"Burn completed: disc {disc_number}, status={result.status.value}")
+        logger.debug(f"Started at: {result.started_at}")
+        logger.debug(f"Completed at: {result.completed_at}")
+        if result.started_at and result.completed_at:
+            logger.debug(f"Duration: {result.completed_at - result.started_at}")
         if result.error_message:
-            logger.error(f"Burn error: {result.error_message}")
-            if result.command_output:
-                logger.error(f"Command output:\n{result.command_output}")
+            logger.error(f"Error message: {result.error_message}")
+        if result.command_output:
+            logger.debug(f"Command output length: {len(result.command_output)} chars")
+            logger.debug(f"Command output (last 50 lines):")
+            output_lines = result.command_output.split('\\n')
+            for line in output_lines[-50:]:
+                logger.debug(f"  | {line}")
+        else:
+            logger.warning("No command output captured - this may indicate the burn didn't execute properly")
+        logger.debug("=" * 60)
 
         # Verify if enabled
         if self.config.burning.verify_after_burn and result.status == BurnStatus.SUCCESS:
