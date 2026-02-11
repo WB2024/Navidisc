@@ -18,25 +18,91 @@ from navidisc.models import MediaType, WriteSpeed
 # Media type specifications: (base_speed_kbps, max_multiplier, capacity_mb)
 # Base speeds: CD=150KB/s, DVD=1350KB/s, BD=4500KB/s
 MEDIA_SPECS: dict[MediaType, dict] = {
-    # CD types (1x = 150 KB/s)
-    MediaType.CD_R_52X: {"base": 150, "max_x": 52, "capacity_mb": 700, "family": "cd"},
-    MediaType.CD_R_48X: {"base": 150, "max_x": 48, "capacity_mb": 700, "family": "cd"},
+    # CD-R Standard (1x = 150 KB/s)
+    MediaType.CD_R_1X: {"base": 150, "max_x": 1, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_R_2X: {"base": 150, "max_x": 2, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_R_4X: {"base": 150, "max_x": 4, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_R_8X: {"base": 150, "max_x": 8, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_R_12X: {"base": 150, "max_x": 12, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_R_16X: {"base": 150, "max_x": 16, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_R_20X: {"base": 150, "max_x": 20, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_R_24X: {"base": 150, "max_x": 24, "capacity_mb": 700, "family": "cd"},
     MediaType.CD_R_32X: {"base": 150, "max_x": 32, "capacity_mb": 700, "family": "cd"},
-    MediaType.CD_RW_24X: {"base": 150, "max_x": 24, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_R_40X: {"base": 150, "max_x": 40, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_R_48X: {"base": 150, "max_x": 48, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_R_52X: {"base": 150, "max_x": 52, "capacity_mb": 700, "family": "cd"},
+    # CD-R Mini (8 cm)
+    MediaType.CD_R_MINI_4X: {"base": 150, "max_x": 4, "capacity_mb": 185, "family": "cd"},
+    MediaType.CD_R_MINI_8X: {"base": 150, "max_x": 8, "capacity_mb": 185, "family": "cd"},
+    MediaType.CD_R_MINI_12X: {"base": 150, "max_x": 12, "capacity_mb": 185, "family": "cd"},
+    MediaType.CD_R_MINI_16X: {"base": 150, "max_x": 16, "capacity_mb": 185, "family": "cd"},
+    MediaType.CD_R_MINI_24X: {"base": 150, "max_x": 24, "capacity_mb": 185, "family": "cd"},
+    # CD-RW Standard
+    MediaType.CD_RW_1X: {"base": 150, "max_x": 1, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_RW_2X: {"base": 150, "max_x": 2, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_RW_4X: {"base": 150, "max_x": 4, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_RW_8X: {"base": 150, "max_x": 8, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_RW_10X: {"base": 150, "max_x": 10, "capacity_mb": 700, "family": "cd"},
     MediaType.CD_RW_12X: {"base": 150, "max_x": 12, "capacity_mb": 700, "family": "cd"},
-    # DVD types (1x = 1350 KB/s)
-    MediaType.DVD_R_16X: {"base": 1350, "max_x": 16, "capacity_mb": 4700, "family": "dvd"},
+    MediaType.CD_RW_16X: {"base": 150, "max_x": 16, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_RW_20X: {"base": 150, "max_x": 20, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_RW_24X: {"base": 150, "max_x": 24, "capacity_mb": 700, "family": "cd"},
+    MediaType.CD_RW_32X: {"base": 150, "max_x": 32, "capacity_mb": 700, "family": "cd"},
+    # CD-RW Mini (8 cm)
+    MediaType.CD_RW_MINI_4X: {"base": 150, "max_x": 4, "capacity_mb": 185, "family": "cd"},
+    MediaType.CD_RW_MINI_8X: {"base": 150, "max_x": 8, "capacity_mb": 185, "family": "cd"},
+    MediaType.CD_RW_MINI_10X: {"base": 150, "max_x": 10, "capacity_mb": 185, "family": "cd"},
+    # DVD-R (1x = 1350 KB/s)
+    MediaType.DVD_R_1X: {"base": 1350, "max_x": 1, "capacity_mb": 4700, "family": "dvd"},
+    MediaType.DVD_R_2X: {"base": 1350, "max_x": 2, "capacity_mb": 4700, "family": "dvd"},
+    MediaType.DVD_R_4X: {"base": 1350, "max_x": 4, "capacity_mb": 4700, "family": "dvd"},
     MediaType.DVD_R_8X: {"base": 1350, "max_x": 8, "capacity_mb": 4700, "family": "dvd"},
-    MediaType.DVD_PLUS_R_16X: {"base": 1350, "max_x": 16, "capacity_mb": 4700, "family": "dvd"},
+    MediaType.DVD_R_16X: {"base": 1350, "max_x": 16, "capacity_mb": 4700, "family": "dvd"},
+    # DVD+R
+    MediaType.DVD_PLUS_R_2_4X: {"base": 1350, "max_x": 2, "capacity_mb": 4700, "family": "dvd"},
+    MediaType.DVD_PLUS_R_4X: {"base": 1350, "max_x": 4, "capacity_mb": 4700, "family": "dvd"},
     MediaType.DVD_PLUS_R_8X: {"base": 1350, "max_x": 8, "capacity_mb": 4700, "family": "dvd"},
+    MediaType.DVD_PLUS_R_16X: {"base": 1350, "max_x": 16, "capacity_mb": 4700, "family": "dvd"},
+    # DVD-RW
+    MediaType.DVD_RW_1X: {"base": 1350, "max_x": 1, "capacity_mb": 4700, "family": "dvd"},
+    MediaType.DVD_RW_2X: {"base": 1350, "max_x": 2, "capacity_mb": 4700, "family": "dvd"},
+    MediaType.DVD_RW_4X: {"base": 1350, "max_x": 4, "capacity_mb": 4700, "family": "dvd"},
     MediaType.DVD_RW_6X: {"base": 1350, "max_x": 6, "capacity_mb": 4700, "family": "dvd"},
+    # DVD+RW
+    MediaType.DVD_PLUS_RW_2_4X: {"base": 1350, "max_x": 2, "capacity_mb": 4700, "family": "dvd"},
+    MediaType.DVD_PLUS_RW_4X: {"base": 1350, "max_x": 4, "capacity_mb": 4700, "family": "dvd"},
     MediaType.DVD_PLUS_RW_8X: {"base": 1350, "max_x": 8, "capacity_mb": 4700, "family": "dvd"},
+    # DVD Dual Layer
+    MediaType.DVD_R_DL_2X: {"base": 1350, "max_x": 2, "capacity_mb": 8500, "family": "dvd"},
+    MediaType.DVD_R_DL_4X: {"base": 1350, "max_x": 4, "capacity_mb": 8500, "family": "dvd"},
     MediaType.DVD_R_DL_8X: {"base": 1350, "max_x": 8, "capacity_mb": 8500, "family": "dvd"},
+    MediaType.DVD_PLUS_R_DL_2_4X: {"base": 1350, "max_x": 2, "capacity_mb": 8500, "family": "dvd"},
+    MediaType.DVD_PLUS_R_DL_4X: {"base": 1350, "max_x": 4, "capacity_mb": 8500, "family": "dvd"},
     MediaType.DVD_PLUS_R_DL_8X: {"base": 1350, "max_x": 8, "capacity_mb": 8500, "family": "dvd"},
-    # Blu-ray types (1x = 4500 KB/s)
-    MediaType.BD_R_16X: {"base": 4500, "max_x": 16, "capacity_mb": 25000, "family": "bd"},
+    # DVD-RAM
+    MediaType.DVD_RAM_2X: {"base": 1350, "max_x": 2, "capacity_mb": 4700, "family": "dvd"},
+    MediaType.DVD_RAM_3X: {"base": 1350, "max_x": 3, "capacity_mb": 4700, "family": "dvd"},
+    MediaType.DVD_RAM_5X: {"base": 1350, "max_x": 5, "capacity_mb": 4700, "family": "dvd"},
+    # DVD Mini (8 cm)
+    MediaType.DVD_R_MINI_2X: {"base": 1350, "max_x": 2, "capacity_mb": 1400, "family": "dvd"},
+    MediaType.DVD_R_MINI_4X: {"base": 1350, "max_x": 4, "capacity_mb": 1400, "family": "dvd"},
+    MediaType.DVD_RW_MINI_2X: {"base": 1350, "max_x": 2, "capacity_mb": 1400, "family": "dvd"},
+    # Blu-ray BD-R (1x = 4500 KB/s)
+    MediaType.BD_R_1X: {"base": 4500, "max_x": 1, "capacity_mb": 25000, "family": "bd"},
+    MediaType.BD_R_2X: {"base": 4500, "max_x": 2, "capacity_mb": 25000, "family": "bd"},
+    MediaType.BD_R_4X: {"base": 4500, "max_x": 4, "capacity_mb": 25000, "family": "bd"},
     MediaType.BD_R_6X: {"base": 4500, "max_x": 6, "capacity_mb": 25000, "family": "bd"},
+    MediaType.BD_R_8X: {"base": 4500, "max_x": 8, "capacity_mb": 25000, "family": "bd"},
+    MediaType.BD_R_10X: {"base": 4500, "max_x": 10, "capacity_mb": 25000, "family": "bd"},
+    MediaType.BD_R_12X: {"base": 4500, "max_x": 12, "capacity_mb": 25000, "family": "bd"},
+    MediaType.BD_R_16X: {"base": 4500, "max_x": 16, "capacity_mb": 25000, "family": "bd"},
+    # Blu-ray BD-RE (rewritable)
+    MediaType.BD_RE_1X: {"base": 4500, "max_x": 1, "capacity_mb": 25000, "family": "bd"},
     MediaType.BD_RE_2X: {"base": 4500, "max_x": 2, "capacity_mb": 25000, "family": "bd"},
+    # BDXL (high capacity)
+    MediaType.BD_R_XL_4X: {"base": 4500, "max_x": 4, "capacity_mb": 100000, "family": "bd"},
+    MediaType.BD_R_XL_6X: {"base": 4500, "max_x": 6, "capacity_mb": 100000, "family": "bd"},
+    MediaType.BD_RE_XL_2X: {"base": 4500, "max_x": 2, "capacity_mb": 100000, "family": "bd"},
 }
 
 # Safe speed multipliers (more conservative for reliability)

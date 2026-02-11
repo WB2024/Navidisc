@@ -360,7 +360,7 @@
                 <!-- Media Type -->
                 <div>
                     <label for="media_type" class="block text-sm font-medium text-surface-700 dark:text-surface-300">
-                        Media Type
+                        Media Type (Speed Rating)
                     </label>
                     <select name="media_type" 
                             id="media_type"
@@ -369,33 +369,124 @@
                                    shadow-sm focus:border-primary-500 focus:ring-primary-500 
                                    px-3 py-2 border">
                         <option value="auto" {% if not config or config.burning.media_type.value == 'auto' %}selected{% endif %}>
-                            Auto-detect
+                            Auto-detect (let drive determine)
                         </option>
-                        <optgroup label="CD">
-                            <option value="cd-r-52x" {% if config and config.burning.media_type.value == 'cd-r-52x' %}selected{% endif %}>CD-R 52x (7.8 MB/s max)</option>
-                            <option value="cd-r-48x" {% if config and config.burning.media_type.value == 'cd-r-48x' %}selected{% endif %}>CD-R 48x (7.2 MB/s max)</option>
-                            <option value="cd-r-32x" {% if config and config.burning.media_type.value == 'cd-r-32x' %}selected{% endif %}>CD-R 32x (4.8 MB/s max)</option>
-                            <option value="cd-rw-24x" {% if config and config.burning.media_type.value == 'cd-rw-24x' %}selected{% endif %}>CD-RW 24x</option>
-                            <option value="cd-rw-12x" {% if config and config.burning.media_type.value == 'cd-rw-12x' %}selected{% endif %}>CD-RW 12x</option>
+                        
+                        <optgroup label="CD-R (Write Once)">
+                            <option value="cd-r-1x" {% if config and config.burning.media_type.value == 'cd-r-1x' %}selected{% endif %}>CD-R 1x (150 KB/s)</option>
+                            <option value="cd-r-2x" {% if config and config.burning.media_type.value == 'cd-r-2x' %}selected{% endif %}>CD-R 2x (300 KB/s)</option>
+                            <option value="cd-r-4x" {% if config and config.burning.media_type.value == 'cd-r-4x' %}selected{% endif %}>CD-R 4x (600 KB/s)</option>
+                            <option value="cd-r-8x" {% if config and config.burning.media_type.value == 'cd-r-8x' %}selected{% endif %}>CD-R 8x (1.2 MB/s)</option>
+                            <option value="cd-r-12x" {% if config and config.burning.media_type.value == 'cd-r-12x' %}selected{% endif %}>CD-R 12x (1.8 MB/s)</option>
+                            <option value="cd-r-16x" {% if config and config.burning.media_type.value == 'cd-r-16x' %}selected{% endif %}>CD-R 16x (2.4 MB/s)</option>
+                            <option value="cd-r-20x" {% if config and config.burning.media_type.value == 'cd-r-20x' %}selected{% endif %}>CD-R 20x (3.0 MB/s)</option>
+                            <option value="cd-r-24x" {% if config and config.burning.media_type.value == 'cd-r-24x' %}selected{% endif %}>CD-R 24x (3.6 MB/s)</option>
+                            <option value="cd-r-32x" {% if config and config.burning.media_type.value == 'cd-r-32x' %}selected{% endif %}>CD-R 32x (4.8 MB/s)</option>
+                            <option value="cd-r-40x" {% if config and config.burning.media_type.value == 'cd-r-40x' %}selected{% endif %}>CD-R 40x (6.0 MB/s)</option>
+                            <option value="cd-r-48x" {% if config and config.burning.media_type.value == 'cd-r-48x' %}selected{% endif %}>CD-R 48x (7.2 MB/s)</option>
+                            <option value="cd-r-52x" {% if config and config.burning.media_type.value == 'cd-r-52x' %}selected{% endif %}>CD-R 52x (7.8 MB/s)</option>
                         </optgroup>
-                        <optgroup label="DVD">
-                            <option value="dvd-r-16x" {% if config and config.burning.media_type.value == 'dvd-r-16x' %}selected{% endif %}>DVD-R 16x (21.6 MB/s max)</option>
-                            <option value="dvd-r-8x" {% if config and config.burning.media_type.value == 'dvd-r-8x' %}selected{% endif %}>DVD-R 8x (10.8 MB/s max)</option>
-                            <option value="dvd+r-16x" {% if config and config.burning.media_type.value == 'dvd+r-16x' %}selected{% endif %}>DVD+R 16x</option>
+                        
+                        <optgroup label="CD-R Mini (8cm)">
+                            <option value="cd-r-mini-4x" {% if config and config.burning.media_type.value == 'cd-r-mini-4x' %}selected{% endif %}>CD-R Mini 4x</option>
+                            <option value="cd-r-mini-8x" {% if config and config.burning.media_type.value == 'cd-r-mini-8x' %}selected{% endif %}>CD-R Mini 8x</option>
+                            <option value="cd-r-mini-12x" {% if config and config.burning.media_type.value == 'cd-r-mini-12x' %}selected{% endif %}>CD-R Mini 12x</option>
+                            <option value="cd-r-mini-16x" {% if config and config.burning.media_type.value == 'cd-r-mini-16x' %}selected{% endif %}>CD-R Mini 16x</option>
+                            <option value="cd-r-mini-24x" {% if config and config.burning.media_type.value == 'cd-r-mini-24x' %}selected{% endif %}>CD-R Mini 24x</option>
+                        </optgroup>
+                        
+                        <optgroup label="CD-RW (Rewritable)">
+                            <option value="cd-rw-1x" {% if config and config.burning.media_type.value == 'cd-rw-1x' %}selected{% endif %}>CD-RW 1x (Low Speed)</option>
+                            <option value="cd-rw-2x" {% if config and config.burning.media_type.value == 'cd-rw-2x' %}selected{% endif %}>CD-RW 2x (Low Speed)</option>
+                            <option value="cd-rw-4x" {% if config and config.burning.media_type.value == 'cd-rw-4x' %}selected{% endif %}>CD-RW 4x (High Speed)</option>
+                            <option value="cd-rw-8x" {% if config and config.burning.media_type.value == 'cd-rw-8x' %}selected{% endif %}>CD-RW 8x (High Speed)</option>
+                            <option value="cd-rw-10x" {% if config and config.burning.media_type.value == 'cd-rw-10x' %}selected{% endif %}>CD-RW 10x (High Speed)</option>
+                            <option value="cd-rw-12x" {% if config and config.burning.media_type.value == 'cd-rw-12x' %}selected{% endif %}>CD-RW 12x (High Speed)</option>
+                            <option value="cd-rw-16x" {% if config and config.burning.media_type.value == 'cd-rw-16x' %}selected{% endif %}>CD-RW 16x (Ultra Speed)</option>
+                            <option value="cd-rw-20x" {% if config and config.burning.media_type.value == 'cd-rw-20x' %}selected{% endif %}>CD-RW 20x (Ultra Speed)</option>
+                            <option value="cd-rw-24x" {% if config and config.burning.media_type.value == 'cd-rw-24x' %}selected{% endif %}>CD-RW 24x (Ultra Speed)</option>
+                            <option value="cd-rw-32x" {% if config and config.burning.media_type.value == 'cd-rw-32x' %}selected{% endif %}>CD-RW 32x (Ultra Speed)</option>
+                        </optgroup>
+                        
+                        <optgroup label="CD-RW Mini (8cm)">
+                            <option value="cd-rw-mini-4x" {% if config and config.burning.media_type.value == 'cd-rw-mini-4x' %}selected{% endif %}>CD-RW Mini 4x</option>
+                            <option value="cd-rw-mini-8x" {% if config and config.burning.media_type.value == 'cd-rw-mini-8x' %}selected{% endif %}>CD-RW Mini 8x</option>
+                            <option value="cd-rw-mini-10x" {% if config and config.burning.media_type.value == 'cd-rw-mini-10x' %}selected{% endif %}>CD-RW Mini 10x</option>
+                        </optgroup>
+                        
+                        <optgroup label="DVD-R (Write Once)">
+                            <option value="dvd-r-1x" {% if config and config.burning.media_type.value == 'dvd-r-1x' %}selected{% endif %}>DVD-R 1x (1.35 MB/s)</option>
+                            <option value="dvd-r-2x" {% if config and config.burning.media_type.value == 'dvd-r-2x' %}selected{% endif %}>DVD-R 2x (2.7 MB/s)</option>
+                            <option value="dvd-r-4x" {% if config and config.burning.media_type.value == 'dvd-r-4x' %}selected{% endif %}>DVD-R 4x (5.4 MB/s)</option>
+                            <option value="dvd-r-8x" {% if config and config.burning.media_type.value == 'dvd-r-8x' %}selected{% endif %}>DVD-R 8x (10.8 MB/s)</option>
+                            <option value="dvd-r-16x" {% if config and config.burning.media_type.value == 'dvd-r-16x' %}selected{% endif %}>DVD-R 16x (21.6 MB/s)</option>
+                        </optgroup>
+                        
+                        <optgroup label="DVD+R (Write Once)">
+                            <option value="dvd+r-2.4x" {% if config and config.burning.media_type.value == 'dvd+r-2.4x' %}selected{% endif %}>DVD+R 2.4x</option>
+                            <option value="dvd+r-4x" {% if config and config.burning.media_type.value == 'dvd+r-4x' %}selected{% endif %}>DVD+R 4x</option>
                             <option value="dvd+r-8x" {% if config and config.burning.media_type.value == 'dvd+r-8x' %}selected{% endif %}>DVD+R 8x</option>
+                            <option value="dvd+r-16x" {% if config and config.burning.media_type.value == 'dvd+r-16x' %}selected{% endif %}>DVD+R 16x</option>
+                        </optgroup>
+                        
+                        <optgroup label="DVD-RW (Rewritable)">
+                            <option value="dvd-rw-1x" {% if config and config.burning.media_type.value == 'dvd-rw-1x' %}selected{% endif %}>DVD-RW 1x</option>
+                            <option value="dvd-rw-2x" {% if config and config.burning.media_type.value == 'dvd-rw-2x' %}selected{% endif %}>DVD-RW 2x</option>
+                            <option value="dvd-rw-4x" {% if config and config.burning.media_type.value == 'dvd-rw-4x' %}selected{% endif %}>DVD-RW 4x</option>
                             <option value="dvd-rw-6x" {% if config and config.burning.media_type.value == 'dvd-rw-6x' %}selected{% endif %}>DVD-RW 6x</option>
+                        </optgroup>
+                        
+                        <optgroup label="DVD+RW (Rewritable)">
+                            <option value="dvd+rw-2.4x" {% if config and config.burning.media_type.value == 'dvd+rw-2.4x' %}selected{% endif %}>DVD+RW 2.4x</option>
+                            <option value="dvd+rw-4x" {% if config and config.burning.media_type.value == 'dvd+rw-4x' %}selected{% endif %}>DVD+RW 4x</option>
                             <option value="dvd+rw-8x" {% if config and config.burning.media_type.value == 'dvd+rw-8x' %}selected{% endif %}>DVD+RW 8x</option>
+                        </optgroup>
+                        
+                        <optgroup label="DVD Dual Layer">
+                            <option value="dvd-r-dl-2x" {% if config and config.burning.media_type.value == 'dvd-r-dl-2x' %}selected{% endif %}>DVD-R DL 2x</option>
+                            <option value="dvd-r-dl-4x" {% if config and config.burning.media_type.value == 'dvd-r-dl-4x' %}selected{% endif %}>DVD-R DL 4x</option>
                             <option value="dvd-r-dl-8x" {% if config and config.burning.media_type.value == 'dvd-r-dl-8x' %}selected{% endif %}>DVD-R DL 8x</option>
+                            <option value="dvd+r-dl-2.4x" {% if config and config.burning.media_type.value == 'dvd+r-dl-2.4x' %}selected{% endif %}>DVD+R DL 2.4x</option>
+                            <option value="dvd+r-dl-4x" {% if config and config.burning.media_type.value == 'dvd+r-dl-4x' %}selected{% endif %}>DVD+R DL 4x</option>
                             <option value="dvd+r-dl-8x" {% if config and config.burning.media_type.value == 'dvd+r-dl-8x' %}selected{% endif %}>DVD+R DL 8x</option>
                         </optgroup>
-                        <optgroup label="Blu-ray">
-                            <option value="bd-r-16x" {% if config and config.burning.media_type.value == 'bd-r-16x' %}selected{% endif %}>BD-R 16x (72 MB/s max)</option>
-                            <option value="bd-r-6x" {% if config and config.burning.media_type.value == 'bd-r-6x' %}selected{% endif %}>BD-R 6x (27 MB/s max)</option>
+                        
+                        <optgroup label="DVD-RAM">
+                            <option value="dvd-ram-2x" {% if config and config.burning.media_type.value == 'dvd-ram-2x' %}selected{% endif %}>DVD-RAM 2x</option>
+                            <option value="dvd-ram-3x" {% if config and config.burning.media_type.value == 'dvd-ram-3x' %}selected{% endif %}>DVD-RAM 3x</option>
+                            <option value="dvd-ram-5x" {% if config and config.burning.media_type.value == 'dvd-ram-5x' %}selected{% endif %}>DVD-RAM 5x</option>
+                        </optgroup>
+                        
+                        <optgroup label="DVD Mini (8cm)">
+                            <option value="dvd-r-mini-2x" {% if config and config.burning.media_type.value == 'dvd-r-mini-2x' %}selected{% endif %}>DVD-R Mini 2x</option>
+                            <option value="dvd-r-mini-4x" {% if config and config.burning.media_type.value == 'dvd-r-mini-4x' %}selected{% endif %}>DVD-R Mini 4x</option>
+                            <option value="dvd-rw-mini-2x" {% if config and config.burning.media_type.value == 'dvd-rw-mini-2x' %}selected{% endif %}>DVD-RW Mini 2x</option>
+                        </optgroup>
+                        
+                        <optgroup label="Blu-ray BD-R (Write Once)">
+                            <option value="bd-r-1x" {% if config and config.burning.media_type.value == 'bd-r-1x' %}selected{% endif %}>BD-R 1x (4.5 MB/s)</option>
+                            <option value="bd-r-2x" {% if config and config.burning.media_type.value == 'bd-r-2x' %}selected{% endif %}>BD-R 2x (9 MB/s)</option>
+                            <option value="bd-r-4x" {% if config and config.burning.media_type.value == 'bd-r-4x' %}selected{% endif %}>BD-R 4x (18 MB/s)</option>
+                            <option value="bd-r-6x" {% if config and config.burning.media_type.value == 'bd-r-6x' %}selected{% endif %}>BD-R 6x (27 MB/s)</option>
+                            <option value="bd-r-8x" {% if config and config.burning.media_type.value == 'bd-r-8x' %}selected{% endif %}>BD-R 8x (36 MB/s)</option>
+                            <option value="bd-r-10x" {% if config and config.burning.media_type.value == 'bd-r-10x' %}selected{% endif %}>BD-R 10x (45 MB/s)</option>
+                            <option value="bd-r-12x" {% if config and config.burning.media_type.value == 'bd-r-12x' %}selected{% endif %}>BD-R 12x (54 MB/s)</option>
+                            <option value="bd-r-16x" {% if config and config.burning.media_type.value == 'bd-r-16x' %}selected{% endif %}>BD-R 16x (72 MB/s)</option>
+                        </optgroup>
+                        
+                        <optgroup label="Blu-ray BD-RE (Rewritable)">
+                            <option value="bd-re-1x" {% if config and config.burning.media_type.value == 'bd-re-1x' %}selected{% endif %}>BD-RE 1x</option>
                             <option value="bd-re-2x" {% if config and config.burning.media_type.value == 'bd-re-2x' %}selected{% endif %}>BD-RE 2x</option>
+                        </optgroup>
+                        
+                        <optgroup label="BDXL (High Capacity)">
+                            <option value="bd-r-xl-4x" {% if config and config.burning.media_type.value == 'bd-r-xl-4x' %}selected{% endif %}>BD-R XL 4x (100GB+)</option>
+                            <option value="bd-r-xl-6x" {% if config and config.burning.media_type.value == 'bd-r-xl-6x' %}selected{% endif %}>BD-R XL 6x (100GB+)</option>
+                            <option value="bd-re-xl-2x" {% if config and config.burning.media_type.value == 'bd-re-xl-2x' %}selected{% endif %}>BD-RE XL 2x (100GB+)</option>
                         </optgroup>
                     </select>
                     <p class="mt-1 text-xs text-surface-500 dark:text-surface-400">
-                        Select your disc media type for optimal speed calculation
+                        Select the speed rating printed on your disc for optimal burn speed calculation
                     </p>
                 </div>
                 

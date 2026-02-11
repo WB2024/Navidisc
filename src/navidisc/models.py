@@ -37,25 +37,91 @@ class ConversionQuality(StrEnum):
 
 class MediaType(StrEnum):
     """Physical disc media type with max speed rating."""
-    # CD types
-    CD_R_52X = "cd-r-52x"  # Standard CD-R, 52x max (7800 KB/s)
-    CD_R_48X = "cd-r-48x"  # 48x CD-R (7200 KB/s)
-    CD_R_32X = "cd-r-32x"  # 32x CD-R (4800 KB/s)
-    CD_RW_24X = "cd-rw-24x"  # CD-RW, 24x max
-    CD_RW_12X = "cd-rw-12x"  # CD-RW, 12x
-    # DVD types
-    DVD_R_16X = "dvd-r-16x"  # Standard DVD-R, 16x max
-    DVD_R_8X = "dvd-r-8x"  # 8x DVD-R
-    DVD_PLUS_R_16X = "dvd+r-16x"  # DVD+R, 16x max
-    DVD_PLUS_R_8X = "dvd+r-8x"  # DVD+R, 8x
-    DVD_RW_6X = "dvd-rw-6x"  # DVD-RW, 6x max
-    DVD_PLUS_RW_8X = "dvd+rw-8x"  # DVD+RW, 8x max
-    DVD_R_DL_8X = "dvd-r-dl-8x"  # DVD-R Dual Layer
-    DVD_PLUS_R_DL_8X = "dvd+r-dl-8x"  # DVD+R Dual Layer
-    # Blu-ray types
-    BD_R_16X = "bd-r-16x"  # BD-R, 16x max
-    BD_R_6X = "bd-r-6x"  # BD-R, 6x
-    BD_RE_2X = "bd-re-2x"  # BD-RE, 2x max
+    # CD-R Standard (12 cm) - various speed ratings
+    CD_R_1X = "cd-r-1x"
+    CD_R_2X = "cd-r-2x"
+    CD_R_4X = "cd-r-4x"
+    CD_R_8X = "cd-r-8x"
+    CD_R_12X = "cd-r-12x"
+    CD_R_16X = "cd-r-16x"
+    CD_R_20X = "cd-r-20x"
+    CD_R_24X = "cd-r-24x"
+    CD_R_32X = "cd-r-32x"
+    CD_R_40X = "cd-r-40x"
+    CD_R_48X = "cd-r-48x"
+    CD_R_52X = "cd-r-52x"
+    # CD-R Mini (8 cm)
+    CD_R_MINI_4X = "cd-r-mini-4x"
+    CD_R_MINI_8X = "cd-r-mini-8x"
+    CD_R_MINI_12X = "cd-r-mini-12x"
+    CD_R_MINI_16X = "cd-r-mini-16x"
+    CD_R_MINI_24X = "cd-r-mini-24x"
+    # CD-RW Standard - various speed ratings
+    CD_RW_1X = "cd-rw-1x"
+    CD_RW_2X = "cd-rw-2x"
+    CD_RW_4X = "cd-rw-4x"
+    CD_RW_8X = "cd-rw-8x"
+    CD_RW_10X = "cd-rw-10x"
+    CD_RW_12X = "cd-rw-12x"
+    CD_RW_16X = "cd-rw-16x"
+    CD_RW_20X = "cd-rw-20x"
+    CD_RW_24X = "cd-rw-24x"
+    CD_RW_32X = "cd-rw-32x"
+    # CD-RW Mini (8 cm)
+    CD_RW_MINI_4X = "cd-rw-mini-4x"
+    CD_RW_MINI_8X = "cd-rw-mini-8x"
+    CD_RW_MINI_10X = "cd-rw-mini-10x"
+    # DVD-R
+    DVD_R_1X = "dvd-r-1x"
+    DVD_R_2X = "dvd-r-2x"
+    DVD_R_4X = "dvd-r-4x"
+    DVD_R_8X = "dvd-r-8x"
+    DVD_R_16X = "dvd-r-16x"
+    # DVD+R
+    DVD_PLUS_R_2_4X = "dvd+r-2.4x"
+    DVD_PLUS_R_4X = "dvd+r-4x"
+    DVD_PLUS_R_8X = "dvd+r-8x"
+    DVD_PLUS_R_16X = "dvd+r-16x"
+    # DVD-RW
+    DVD_RW_1X = "dvd-rw-1x"
+    DVD_RW_2X = "dvd-rw-2x"
+    DVD_RW_4X = "dvd-rw-4x"
+    DVD_RW_6X = "dvd-rw-6x"
+    # DVD+RW
+    DVD_PLUS_RW_2_4X = "dvd+rw-2.4x"
+    DVD_PLUS_RW_4X = "dvd+rw-4x"
+    DVD_PLUS_RW_8X = "dvd+rw-8x"
+    # DVD Dual Layer
+    DVD_R_DL_2X = "dvd-r-dl-2x"
+    DVD_R_DL_4X = "dvd-r-dl-4x"
+    DVD_R_DL_8X = "dvd-r-dl-8x"
+    DVD_PLUS_R_DL_2_4X = "dvd+r-dl-2.4x"
+    DVD_PLUS_R_DL_4X = "dvd+r-dl-4x"
+    DVD_PLUS_R_DL_8X = "dvd+r-dl-8x"
+    # DVD-RAM
+    DVD_RAM_2X = "dvd-ram-2x"
+    DVD_RAM_3X = "dvd-ram-3x"
+    DVD_RAM_5X = "dvd-ram-5x"
+    # DVD Mini (8 cm)
+    DVD_R_MINI_2X = "dvd-r-mini-2x"
+    DVD_R_MINI_4X = "dvd-r-mini-4x"
+    DVD_RW_MINI_2X = "dvd-rw-mini-2x"
+    # Blu-ray BD-R
+    BD_R_1X = "bd-r-1x"
+    BD_R_2X = "bd-r-2x"
+    BD_R_4X = "bd-r-4x"
+    BD_R_6X = "bd-r-6x"
+    BD_R_8X = "bd-r-8x"
+    BD_R_10X = "bd-r-10x"
+    BD_R_12X = "bd-r-12x"
+    BD_R_16X = "bd-r-16x"
+    # Blu-ray BD-RE (rewritable)
+    BD_RE_1X = "bd-re-1x"
+    BD_RE_2X = "bd-re-2x"
+    # BDXL (high capacity)
+    BD_R_XL_4X = "bd-r-xl-4x"
+    BD_R_XL_6X = "bd-r-xl-6x"
+    BD_RE_XL_2X = "bd-re-xl-2x"
     # Auto-detect
     AUTO = "auto"  # Detect from inserted media
 
