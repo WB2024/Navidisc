@@ -19,7 +19,7 @@ from navidisc.config import (
 )
 from navidisc.core import Orchestrator, OrchestratorEvent
 from navidisc.media.converter import estimate_mp3_size
-from navidisc.models import ConversionQuality, DiscType, DownloadMode, MediaType, WriteSpeed
+from navidisc.models import AudioCDBurnMode, ConversionQuality, DiscType, DownloadMode, MediaType, WriteSpeed
 from navidisc.planner import DiscPlanningEngine
 
 router = APIRouter()
@@ -273,6 +273,16 @@ async def save_configuration(request: Request):
         download_mode = form.get("download_mode", "download-if-missing")
         staging_dir = form.get("staging_dir", "").strip() or "/tmp/navidisc"
         
+        # Audio CD settings
+        audio_burn_mode = form.get("audio_burn_mode", "dao")
+        track_gap_seconds_str = form.get("track_gap_seconds", "2")
+        cd_text = form.get("cd_text") == "true"
+        
+        try:
+            track_gap_seconds = int(track_gap_seconds_str)
+        except ValueError:
+            track_gap_seconds = 2
+        
         # Validate required fields
         if not navidrome_url or not navidrome_username or not navidrome_password:
             return templates.TemplateResponse(
@@ -310,6 +320,9 @@ async def save_configuration(request: Request):
                 disc_size_mb=disc_size_mb,
                 media_type=MediaType(media_type),
                 write_speed=WriteSpeed(write_speed),
+                audio_burn_mode=AudioCDBurnMode(audio_burn_mode),
+                track_gap_seconds=track_gap_seconds,
+                cd_text=cd_text,
             ),
             media=MediaConfig(
                 staging_dir=Path(staging_dir),

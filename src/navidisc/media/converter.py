@@ -451,3 +451,197 @@ class AudioConverter:
             True if the file should be converted (not already MP3).
         """
         return source_path.suffix.lower() != ".mp3"
+
+
+# =============================================================================
+# WAV Conversion for Audio CDs (Red Book)
+# =============================================================================
+
+# Audio CD requirements: 16-bit, 44.1kHz, stereo PCM
+AUDIO_CD_SAMPLE_RATE = 44100
+AUDIO_CD_BIT_DEPTH = 16
+AUDIO_CD_CHANNELS = 2
+AUDIO_CD_BYTES_PER_SECOND = AUDIO_CD_SAMPLE_RATE * (AUDIO_CD_BIT_DEPTH // 8) * AUDIO_CD_CHANNELS  # 176400
+
+
+def estimate_wav_size(duration_seconds: float) -> int:
+    """Estimate WAV file size for audio CD format.
+    
+    Audio CDs use 16-bit, 44.1kHz, stereo PCM which is exactly
+    176,400 bytes per second of audio.
+    
+    Args:
+        duration_seconds: Track duration in seconds.
+        
+    Returns:
+        Estimated WAV file size in bytes.
+    """
+    # WAV header is typically 44 bytes
+    header_size = 44
+    audio_size = int(duration_seconds * AUDIO_CD_BYTES_PER_SECOND)
+    return header_size + audio_size
+
+
+async def estimate_wav_size_from_file(
+    file_path: Path,
+    fallback_duration_seconds: float | None = None,
+) -> int:
+    """Estimate WAV size by probing the actual file duration.
+    
+    Args:
+        file_path: Path to the source audio file.
+        fallback_duration_seconds: Duration to use if ffprobe fails.
+        
+    Returns:
+        Estimated WAV file size in bytes.
+    """
+    # Try to get actual duration via ffprobe
+    duration = await ffprobe_duration(file_path)
+    
+    if duration is None and fallback_duration_seconds:
+        logger.debug(f"Using fallback duration {fallback_duration_seconds}s for {file_path.name}")
+        duration = fallback_duration_seconds
+    
+    if duration is None:
+        logger.warning(f"Cannot estimate WAV size for {file_path.name}: no duration available")
+        # Rough fallback: assume original file is comparable
+        if file_path.exists():
+            # WAV is typically 10x larger than MP3
+            return file_path.stat().st_size * 10
+        return 0
+    
+    return estimate_wav_size(duration)
+
+
+class WavConverter:
+    """Converts audio files to WAV format for audio CD burning.
+    
+    Audio CDs require 16-bit, 44.1kHz, stereo PCM audio. This converter
+    ensures all audio is in the correct format for Red Book audio CDs.
+    
+    Example:
+        converter = WavConverter(output_dir=Path("/tmp/navidisc/wav"))
+        
+        converted_paths = await converter.convert_many(
+            source_paths,
+            progress_callback=lambda p: print(f"Converting: {p.filename}")
+        )
+    """
+    
+    def __init__(self, output_dir: Path):
+        """Initialize the WAV converter.
+        
+        Args:
+            output_dir: Directory to write converted WAV files.
+        """
+        self.output_dir = output_dir
+    
+    def prepare(self) -> None:
+        """Prepare the output directory."""
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+    
+    async def convert(self, source_path: Path) -> Path:
+        """Convert a single audio file to CD-quality WAV.
+        
+        Args:
+            source_path: Path to the source audio file.
+            
+        Returns:
+            Path to the converted WAV file.
+            
+        Raises:
+            ConversionError: If conversion fails.
+        """
+        if not source_path.exists():
+            raise ConversionError(f"Source file not found: {source_path}", source_path)
+        
+        # Output path
+        output_path = self.output_dir / f"{source_path.stem}.wav"
+        
+        # Build ffmpeg command for CD-quality WAV
+        # -ar 44100: sample rate 44.1kHz
+        # -ac 2: stereo
+        # -sample_fmt s16: 16-bit signed PCM
+        # -f wav: output format
+        cmd = [
+            "ffmpeg",
+            "-i", str(source_path),
+            "-ar", str(AUDIO_CD_SAMPLE_RATE),
+            "-ac", str(AUDIO_CD_CHANNELS),
+            "-sample_fmt", "s16",
+            "-f", "wav",
+            "-y",
+            str(output_path),
+        ]
+        
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            
+            _, stderr = await process.communicate()
+            
+            if process.returncode != 0:
+                error_msg = stderr.decode() if stderr else "Unknown error"
+                raise ConversionError(
+                    f"ffmpeg WAV conversion failed for {source_path.name}: {error_msg}",
+                    source_path,
+                )
+            
+            return output_path
+        
+        except FileNotFoundError:
+            raise ConversionError(
+                "ffmpeg not found. Please install ffmpeg to enable audio conversion.",
+                source_path,
+            )
+        except Exception as e:
+            if isinstance(e, ConversionError):
+                raise
+            raise ConversionError(f"WAV conversion failed: {e}", source_path)
+    
+    async def convert_many(
+        self,
+        track_paths: dict[str, Path],
+        progress_callback: ProgressCallback | None = None,
+    ) -> dict[str, Path]:
+        """Convert multiple audio files to CD-quality WAV.
+        
+        Args:
+            track_paths: Mapping of track IDs to source file paths.
+            progress_callback: Optional callback for progress updates.
+            
+        Returns:
+            Mapping of track IDs to converted WAV file paths.
+        """
+        self.prepare()
+        
+        converted: dict[str, Path] = {}
+        total = len(track_paths)
+        completed = 0
+        
+        for track_id, source_path in track_paths.items():
+            if progress_callback:
+                progress_callback(ConversionProgress(
+                    source_path=source_path,
+                    total_files=total,
+                    completed_files=completed,
+                ))
+            
+            # Convert the file
+            output_path = await self.convert(source_path)
+            converted[track_id] = output_path
+            completed += 1
+        
+        # Final progress update
+        if progress_callback and track_paths:
+            last_path = list(track_paths.values())[-1]
+            progress_callback(ConversionProgress(
+                source_path=last_path,
+                total_files=total,
+                completed_files=completed,
+            ))
+        
+        return converted

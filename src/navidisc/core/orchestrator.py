@@ -19,15 +19,16 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 from navidisc.api import SubsonicClient
-from navidisc.burner import BurnerAdapter, detect_backend
+from navidisc.burner import BurnerAdapter, detect_backend, AudioTrack, write_toc_file
 from navidisc.config import NavidiscConfig
-from navidisc.media import AudioConverter, Downloader, MediaResolver, ResolvedTrack
-from navidisc.media.converter import estimate_mp3_size, estimate_mp3_size_from_file
+from navidisc.media import AudioConverter, Downloader, MediaResolver, ResolvedTrack, WavConverter
+from navidisc.media.converter import estimate_mp3_size, estimate_mp3_size_from_file, ffprobe_duration
 from navidisc.media.resolver import ResolveMethod
 from navidisc.models import (
     BurnPlan,
     BurnStatus,
     ConversionQuality,
+    DiscType,
     NavidiscError,
     OrchestratorState,
     Playlist,
@@ -115,6 +116,7 @@ class Orchestrator:
         self._resolver: MediaResolver | None = None
         self._downloader: Downloader | None = None
         self._converter: AudioConverter | None = None
+        self._wav_converter: WavConverter | None = None
         self._planner: DiscPlanningEngine | None = None
         self._staging: StagingManager | None = None
         self._burner: BurnerAdapter | None = None
@@ -222,6 +224,13 @@ class Orchestrator:
             )
         return self._converter
 
+    def _get_wav_converter(self) -> WavConverter:
+        """Get or create the WAV converter for audio CDs."""
+        if self._wav_converter is None:
+            wav_dir = self.config.media.staging_dir / "wav"
+            self._wav_converter = WavConverter(output_dir=wav_dir)
+        return self._wav_converter
+
     def _get_planner(self) -> DiscPlanningEngine:
         """Get or create the disc planner."""
         if self._planner is None:
@@ -252,6 +261,10 @@ class Orchestrator:
                 write_speed=self.config.burning.write_speed,
                 custom_speed=self.config.burning.custom_speed,
                 dry_run=self.dry_run,
+                # Audio CD settings
+                audio_burn_mode=self.config.burning.audio_burn_mode.value,
+                audio_gap_seconds=self.config.burning.track_gap_seconds,
+                audio_cd_text=self.config.burning.cd_text,
             )
         return self._burner
 
@@ -587,7 +600,6 @@ class Orchestrator:
 
     async def _step_stage_disc(self, disc_number: int) -> None:
         """Stage files for a disc."""
-        staging = self._get_staging()
         plan = self.session.burn_plan
         disc_plan = plan.discs[disc_number - 1]
         
@@ -605,7 +617,13 @@ class Orchestrator:
         # Build track lookup
         track_lookup = {t.id: t for t in self._playlist.tracks}
 
-        staged = staging.stage_disc(disc_plan, self._track_paths, track_lookup)
+        # Different staging for audio CDs vs data discs
+        if self.config.burning.disc_type == DiscType.AUDIO:
+            staged = await self._stage_audio_cd(disc_number, disc_plan, track_lookup)
+        else:
+            staging = self._get_staging()
+            staged = staging.stage_disc(disc_plan, self._track_paths, track_lookup)
+        
         self._staged_discs[disc_number] = staged  # key by disc number, not append
         logger.debug(f"Staged {len(staged.files)} files to {staged.directory}")
 
@@ -805,6 +823,123 @@ class Orchestrator:
         await self._step_plan()
 
         return self.session.burn_plan
+
+    # =========================================================================
+    # Audio CD Staging
+    # =========================================================================
+
+    async def _stage_audio_cd(
+        self,
+        disc_number: int,
+        disc_plan,
+        track_lookup: dict[str, Any],
+    ) -> StagedDisc:
+        """Stage files for an audio CD (Red Book).
+        
+        Audio CDs require:
+        - WAV format (16-bit, 44.1kHz, stereo PCM)
+        - TOC file for cdrdao
+        
+        Args:
+            disc_number: Disc number being staged.
+            disc_plan: DiscPlan with track assignments.
+            track_lookup: Map of track IDs to Track objects.
+            
+        Returns:
+            StagedDisc with WAV files and TOC.
+        """
+        from navidisc.models import StagedFile
+        
+        # Create disc directory
+        disc_dir = self.config.media.staging_dir / f"disc_{disc_number:02d}"
+        disc_dir.mkdir(parents=True, exist_ok=True)
+        
+        wav_converter = self._get_wav_converter()
+        wav_converter.prepare()
+        
+        staged_files = []
+        audio_tracks = []
+        
+        self._emit(OrchestratorEvent.PROGRESS, {
+            "step": "converting_wav",
+            "disc_number": disc_number,
+            "message": f"Converting {disc_plan.track_count} tracks to WAV for audio CD...",
+        })
+        
+        for idx, track_entry in enumerate(disc_plan.tracks, start=1):
+            track_id = track_entry.track_id
+            source_path = self._track_paths.get(track_id)
+            track = track_lookup.get(track_id)
+            
+            if not source_path or not track:
+                logger.warning(f"Track {track_id} not found, skipping")
+                continue
+            
+            # Convert to WAV
+            logger.debug(f"Converting track {idx}/{disc_plan.track_count}: {track.title}")
+            wav_path = await wav_converter.convert(source_path)
+            
+            # Copy/move WAV to disc directory with proper naming
+            dest_filename = f"{idx:02d} - {self._sanitize_filename(track.title)}.wav"
+            dest_path = disc_dir / dest_filename
+            
+            # Copy the WAV file to disc directory
+            shutil.copy2(wav_path, dest_path)
+            
+            # Get duration for TOC
+            duration = await ffprobe_duration(dest_path)
+            if duration is None:
+                duration = float(track.duration)
+            
+            # Track staged file
+            staged_files.append(StagedFile(
+                track_id=track_id,
+                source_path=source_path,
+                staged_path=dest_path,
+                filename=dest_filename,
+            ))
+            
+            # Build AudioTrack for TOC
+            audio_tracks.append(AudioTrack(
+                track_number=idx,
+                file_path=dest_path,
+                title=track.title,
+                artist=track.artist,
+                duration_seconds=duration,
+                album=self._playlist.name if self._playlist else "",
+            ))
+            
+            self._emit(OrchestratorEvent.PROGRESS, {
+                "step": "converting_wav",
+                "disc_number": disc_number,
+                "message": f"Converted {idx}/{disc_plan.track_count}: {track.title}",
+                "percent": (idx / disc_plan.track_count) * 100,
+            })
+        
+        # Generate TOC file for cdrdao
+        toc_path = disc_dir / "disc.toc"
+        album_title = f"{self._playlist.name} - Disc {disc_number}" if self._playlist else f"Disc {disc_number}"
+        
+        write_toc_file(
+            output_path=toc_path,
+            tracks=audio_tracks,
+            album_title=album_title,
+            album_artist="",  # Could extract from tracks if all same artist
+            gap_seconds=self.config.burning.track_gap_seconds,
+            include_cd_text=self.config.burning.cd_text,
+        )
+        
+        logger.info(f"Generated TOC file: {toc_path}")
+        
+        # Calculate total size (for info)
+        total_size = sum(f.staged_path.stat().st_size for f in staged_files if f.staged_path.exists())
+        
+        return StagedDisc(
+            disc_number=disc_number,
+            directory=disc_dir,
+            files=staged_files,
+            total_size_bytes=total_size,
+        )
 
     # =========================================================================
     # Track List Export

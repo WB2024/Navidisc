@@ -4,11 +4,19 @@ Provides disc burning abstraction and backend implementations.
 """
 
 from navidisc.burner.adapter import (
+    AudioCDBackend,
     BurnerAdapter,
     DryRunBackend,
     GrowIsofsBackend,
     WodimBackend,
     detect_backend,
+)
+from navidisc.burner.cuesheet import (
+    AudioTrack,
+    generate_cue_sheet,
+    generate_toc_file,
+    write_cue_sheet,
+    write_toc_file,
 )
 from navidisc.burner.drive import (
     DriveInfo,
@@ -23,11 +31,17 @@ from navidisc.burner.drive import (
 )
 
 __all__ = [
+    "AudioCDBackend",
     "BurnerAdapter",
     "GrowIsofsBackend",
     "WodimBackend",
     "DryRunBackend",
     "detect_backend",
+    "AudioTrack",
+    "generate_cue_sheet",
+    "generate_toc_file",
+    "write_cue_sheet",
+    "write_toc_file",
     "DriveInfo",
     "SpeedRecommendation",
     "calculate_write_speed",

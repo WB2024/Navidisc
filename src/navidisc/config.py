@@ -11,7 +11,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from navidisc.models import ConversionQuality, DiscType, DownloadMode, MediaType, WriteSpeed
+from navidisc.models import AudioCDBurnMode, ConversionQuality, DiscType, DownloadMode, MediaType, WriteSpeed
 
 
 class NavidromeConfig(BaseModel):
@@ -51,6 +51,22 @@ class BurningConfig(BaseModel):
     audio_disc_minutes: int = Field(default=80, ge=20, le=100, description="Audio CD capacity in minutes")
     verify_after_burn: bool = Field(default=True, description="Verify disc after burning")
     eject_after_burn: bool = Field(default=True, description="Eject disc after burning")
+    
+    # Audio CD specific settings
+    audio_burn_mode: AudioCDBurnMode = Field(
+        default=AudioCDBurnMode.DAO,
+        description="Burn mode for audio CDs (dao=gapless capable, tao=track-at-once)"
+    )
+    track_gap_seconds: int = Field(
+        default=2,
+        ge=0,
+        le=8,
+        description="Gap between tracks in seconds (0=gapless, only works in DAO mode)"
+    )
+    cd_text: bool = Field(
+        default=True,
+        description="Embed CD-TEXT with track/artist/album info (requires compatible player)"
+    )
 
     @property
     def disc_size_bytes(self) -> int:

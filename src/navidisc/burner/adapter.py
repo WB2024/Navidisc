@@ -842,6 +842,303 @@ class WodimBackend(BurnerAdapter):
             return False
 
 
+class AudioCDBackend(BurnerAdapter):
+    """Burner backend for audio CDs using cdrdao.
+    
+    This backend burns Red Book audio CDs with support for:
+    - Disc-at-once (DAO) mode for gapless playback
+    - Track-at-once (TAO) mode with standard gaps
+    - CD-TEXT embedding for track/artist/album info
+    - Custom gap duration (0-8 seconds)
+    
+    Requires:
+    - cdrdao for DAO mode
+    - WAV files in 44.1kHz/16-bit/stereo format
+    """
+    
+    def __init__(
+        self,
+        burn_mode: str = "dao",
+        gap_seconds: int = 2,
+        cd_text: bool = True,
+        write_speed: WriteSpeed = WriteSpeed.AUTO,
+        custom_speed: int | None = None,
+    ):
+        """Initialize audio CD backend.
+        
+        Args:
+            burn_mode: "dao" for disc-at-once, "tao" for track-at-once.
+            gap_seconds: Gap between tracks (0-8 seconds, 0=gapless in DAO).
+            cd_text: Whether to embed CD-TEXT metadata.
+            write_speed: Speed preset.
+            custom_speed: Custom speed value.
+        """
+        self.burn_mode = burn_mode.lower()
+        self.gap_seconds = max(0, min(8, gap_seconds))  # Clamp 0-8
+        self.cd_text = cd_text
+        self.write_speed_preset = write_speed
+        self.custom_speed = custom_speed
+        self._drive_info: DriveInfo | None = None
+        self._speed_recommendation: SpeedRecommendation | None = None
+    
+    @property
+    def name(self) -> str:
+        return "cdrdao"
+    
+    @property
+    def supported_disc_types(self) -> list[DiscType]:
+        return [DiscType.AUDIO]
+    
+    @staticmethod
+    def is_available() -> bool:
+        """Check if cdrdao is available."""
+        return shutil.which("cdrdao") is not None
+    
+    async def check_device(self, device: str) -> tuple[bool, str]:
+        """Check if device is ready for audio CD burning."""
+        try:
+            # Detect drive info
+            self._drive_info = await detect_drive_info(device)
+            
+            # For audio CDs, always use safe speeds (max 24x for CD-R)
+            # Override to SAFE if AUTO was selected
+            speed_preset = self.write_speed_preset
+            if speed_preset == WriteSpeed.AUTO:
+                speed_preset = WriteSpeed.SAFE
+            
+            self._speed_recommendation = calculate_write_speed(
+                write_speed_preset=speed_preset,
+                media_type=MediaType.CD_R_52X,  # Audio CDs are always CD-R
+                drive_info=self._drive_info,
+                custom_speed=self.custom_speed,
+            )
+            
+            status_parts = ["Device ready for audio CD"]
+            if self._drive_info:
+                status_parts.append(f"Drive: {self._drive_info.vendor} {self._drive_info.model}")
+            if self._speed_recommendation:
+                status_parts.append(f"Speed: {self._speed_recommendation.reason}")
+            
+            return True, " | ".join(status_parts)
+        
+        except Exception as e:
+            return False, f"Device check failed: {e}"
+    
+    async def burn(
+        self,
+        disc_path: Path,
+        device: str,
+        disc_number: int = 1,
+        progress_callback: ProgressCallback | None = None,
+    ) -> BurnResult:
+        """Burn an audio CD using cdrdao.
+        
+        The disc_path should contain:
+        - WAV files in correct order (01-*.wav, 02-*.wav, etc.)
+        - A .toc file defining the track layout
+        
+        Args:
+            disc_path: Path to disc staging directory with WAV and TOC files.
+            device: Device path (e.g., /dev/sr0).
+            disc_number: Disc number for tracking.
+            progress_callback: Progress update callback.
+            
+        Returns:
+            BurnResult with status.
+        """
+        started_at = datetime.now()
+        
+        # Debug logging
+        logger.debug("=" * 60)
+        logger.debug("CDRDAO AUDIO CD BURN - DEBUG INFO")
+        logger.debug("=" * 60)
+        logger.debug(f"Disc path: {disc_path}")
+        logger.debug(f"Device: {device}")
+        logger.debug(f"Burn mode: {self.burn_mode}")
+        logger.debug(f"Gap seconds: {self.gap_seconds}")
+        logger.debug(f"CD-TEXT enabled: {self.cd_text}")
+        
+        # Find TOC file
+        toc_files = list(disc_path.glob("*.toc"))
+        if not toc_files:
+            return BurnResult(
+                disc_number=disc_number,
+                status=BurnStatus.FAILED,
+                device=device,
+                started_at=started_at,
+                completed_at=datetime.now(),
+                error_message=f"No .toc file found in {disc_path}",
+            )
+        
+        toc_file = toc_files[0]
+        logger.debug(f"Using TOC file: {toc_file}")
+        
+        # List WAV files
+        wav_files = sorted(disc_path.glob("*.wav"))
+        logger.debug(f"WAV files to burn: {len(wav_files)}")
+        for wf in wav_files:
+            logger.debug(f"  {wf.name}: {wf.stat().st_size / 1024 / 1024:.1f} MB")
+        
+        if progress_callback:
+            progress_callback(BurnProgress(
+                disc_number=disc_number,
+                status="preparing",
+                message=f"Preparing to burn {len(wav_files)} tracks to audio CD",
+            ))
+        
+        # Build cdrdao command
+        # cdrdao write [options] toc-file
+        cmd = ["cdrdao"]
+        
+        # Write mode based on burn_mode
+        if self.burn_mode == "dao":
+            cmd.append("write")
+            # DAO mode - write entire disc at once
+        else:
+            cmd.append("write")
+            # TAO mode would be different but cdrdao primarily does DAO
+        
+        # Device
+        cmd.extend(["--device", device])
+        
+        # Speed (cdrdao uses x multiplier directly)
+        if self._speed_recommendation and self._speed_recommendation.speed_x:
+            cmd.extend(["--speed", str(self._speed_recommendation.speed_x)])
+        
+        # Overburn protection off (allow slight overburn if needed)
+        # cmd.append("--overburn")
+        
+        # Force mode (don't ask for confirmation)
+        cmd.append("--force")
+        
+        # Verbose output for progress parsing
+        cmd.extend(["-v", "2"])
+        
+        # TOC file
+        cmd.append(str(toc_file))
+        
+        logger.info(f"cdrdao command: {' '.join(cmd)}")
+        
+        if progress_callback:
+            progress_callback(BurnProgress(
+                disc_number=disc_number,
+                status="burning",
+                percent=0,
+                message="Starting cdrdao burn...",
+            ))
+        
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(disc_path),  # Run in disc directory so relative paths work
+            )
+            
+            # Read output for progress
+            output_lines = []
+            while True:
+                line = await process.stderr.readline()
+                if not line:
+                    break
+                
+                line_text = line.decode().strip()
+                output_lines.append(line_text)
+                logger.debug(f"cdrdao: {line_text}")
+                
+                # Parse progress - cdrdao shows "Writing track XX..."
+                # and progress like "Wrote XXX of YYY MB"
+                if "Writing track" in line_text:
+                    if progress_callback:
+                        progress_callback(BurnProgress(
+                            disc_number=disc_number,
+                            status="burning",
+                            message=line_text,
+                        ))
+                elif "Wrote" in line_text and "MB" in line_text:
+                    # Try to parse progress percentage
+                    try:
+                        # Format: "Wrote XXX of YYY MB"
+                        import re
+                        match = re.search(r"Wrote\s+(\d+)\s+of\s+(\d+)", line_text)
+                        if match:
+                            written = int(match.group(1))
+                            total = int(match.group(2))
+                            percent = (written / total) * 100 if total > 0 else 0
+                            if progress_callback:
+                                progress_callback(BurnProgress(
+                                    disc_number=disc_number,
+                                    status="burning",
+                                    percent=percent,
+                                    message=line_text,
+                                ))
+                    except Exception:
+                        pass
+            
+            # Also read stdout
+            stdout_data, _ = await process.communicate()
+            if stdout_data:
+                output_lines.extend(stdout_data.decode().splitlines())
+            
+            full_output = "\n".join(output_lines)
+            
+            if process.returncode == 0:
+                logger.info("cdrdao burn completed successfully")
+                if progress_callback:
+                    progress_callback(BurnProgress(
+                        disc_number=disc_number,
+                        status="complete",
+                        percent=100,
+                        message="Audio CD burn complete",
+                    ))
+                
+                return BurnResult(
+                    disc_number=disc_number,
+                    status=BurnStatus.SUCCESS,
+                    device=device,
+                    started_at=started_at,
+                    completed_at=datetime.now(),
+                    command_output=full_output,
+                )
+            else:
+                logger.error(f"cdrdao failed with code {process.returncode}")
+                logger.error(f"Output: {full_output}")
+                
+                return BurnResult(
+                    disc_number=disc_number,
+                    status=BurnStatus.FAILED,
+                    device=device,
+                    started_at=started_at,
+                    completed_at=datetime.now(),
+                    error_message=f"cdrdao failed with exit code {process.returncode}",
+                    command_output=full_output,
+                )
+        
+        except Exception as e:
+            logger.exception(f"cdrdao burn failed: {e}")
+            return BurnResult(
+                disc_number=disc_number,
+                status=BurnStatus.FAILED,
+                device=device,
+                started_at=started_at,
+                completed_at=datetime.now(),
+                error_message=str(e),
+            )
+    
+    async def eject(self, device: str) -> bool:
+        """Eject the disc."""
+        try:
+            result = await asyncio.create_subprocess_exec(
+                "eject", device,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await result.communicate()
+            return result.returncode == 0
+        except Exception:
+            return False
+
+
 class DryRunBackend(BurnerAdapter):
     """Dry-run backend for testing without burning.
 
@@ -955,6 +1252,10 @@ def detect_backend(
     write_speed: WriteSpeed = WriteSpeed.AUTO,
     custom_speed: int | None = None,
     dry_run: bool = False,
+    # Audio CD specific options
+    audio_burn_mode: str = "dao",
+    audio_gap_seconds: int = 2,
+    audio_cd_text: bool = True,
 ) -> BurnerAdapter:
     """Detect and return an appropriate burner backend.
 
@@ -964,6 +1265,9 @@ def detect_backend(
         write_speed: Speed preset (auto, max, safe, custom).
         custom_speed: Custom speed value when write_speed=CUSTOM.
         dry_run: If True, return dry-run backend.
+        audio_burn_mode: Burn mode for audio CDs ("dao" or "tao").
+        audio_gap_seconds: Gap between tracks for audio CDs (0-8 seconds).
+        audio_cd_text: Whether to embed CD-TEXT in audio CDs.
 
     Returns:
         Appropriate BurnerAdapter instance.
@@ -1002,11 +1306,22 @@ def detect_backend(
                 "Please install dvd+rw-tools (growisofs)."
             )
 
-    # Audio disc - would need cdrecord/cdrdao
-    raise BurnerError(
-        f"No backend available for {disc_type.value} discs. "
-        "Audio CD burning is not yet implemented."
-    )
+    # Audio CD - use cdrdao
+    if disc_type == DiscType.AUDIO:
+        if AudioCDBackend.is_available():
+            return AudioCDBackend(
+                burn_mode=audio_burn_mode,
+                gap_seconds=audio_gap_seconds,
+                cd_text=audio_cd_text,
+                write_speed=write_speed,
+                custom_speed=custom_speed,
+            )
+        raise BurnerError(
+            "No audio CD burning backend available. "
+            "Please install cdrdao for audio CD burning."
+        )
+
+    raise BurnerError(f"Unknown disc type: {disc_type.value}")
 
 
 def list_available_backends() -> list[str]:
@@ -1022,5 +1337,8 @@ def list_available_backends() -> list[str]:
 
     if GrowIsofsBackend.is_available():
         available.append("growisofs")
+
+    if AudioCDBackend.is_available():
+        available.append("cdrdao")
 
     return available

@@ -51,3 +51,22 @@ html {
 [x-cloak] {
     display: none !important;
 }
+
+/* Toggle switch checkbox */
+.toggle-checkbox {
+    transition: right 0.2s ease-in-out, border-color 0.2s ease-in-out;
+    right: auto;
+}
+
+.toggle-checkbox:checked {
+    right: 0;
+}
+
+.toggle-checkbox:checked + .toggle-label {
+    background-color: rgb(var(--color-primary-500));
+}
+
+/* Ensure toggle is positioned correctly */
+.toggle-checkbox:not(:checked) {
+    right: calc(100% - 1.5rem);
+}

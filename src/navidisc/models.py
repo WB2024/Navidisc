@@ -68,6 +68,12 @@ class WriteSpeed(StrEnum):
     CUSTOM = "custom"  # Use custom speed value
 
 
+class AudioCDBurnMode(StrEnum):
+    """Burn mode for audio CDs."""
+    TAO = "tao"  # Track-at-once: allows pausing between tracks (gaps enforced)
+    DAO = "dao"  # Disc-at-once: writes entire disc in one pass (gapless possible)
+
+
 class OrchestratorState(StrEnum):
     """States for the main workflow state machine."""
     INIT = "init"
