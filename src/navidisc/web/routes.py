@@ -59,10 +59,27 @@ class ConfigUpdate(BaseModel):
 class BurnRequest(BaseModel):
     """Burn request."""
 
-    playlist_id: str
-    playlist_name: str
+    playlist_id: str | None = None
+    playlist_name: str | None = None
+    album_id: str | None = None
+    album_name: str | None = None
     dry_run: bool = False
     selected_discs: list[int] | None = None  # If None, burn all discs
+    
+    @property
+    def source_id(self) -> str:
+        """Get the source ID (playlist or album)."""
+        return self.playlist_id or self.album_id or ""
+    
+    @property
+    def source_name(self) -> str:
+        """Get the source name (playlist or album)."""
+        return self.playlist_name or self.album_name or ""
+    
+    @property
+    def is_album(self) -> bool:
+        """Whether this is an album burn request."""
+        return self.album_id is not None
 
 
 # =============================================================================
@@ -111,6 +128,31 @@ async def playlists_page(request: Request):
     )
 
 
+@router.get("/albums", response_class=HTMLResponse)
+async def albums_page(request: Request):
+    """Albums page."""
+    templates = get_templates(request)
+    config = get_config(request)
+
+    if not config:
+        return templates.TemplateResponse(
+            "partials/error.html",
+            {
+                "request": request,
+                "message": "Please configure Navidrome settings first",
+            },
+        )
+
+    return templates.TemplateResponse(
+        "albums.html",
+        {
+            "request": request,
+            "config": config,
+            "has_config": config is not None,
+        },
+    )
+
+
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     """Settings page."""
@@ -142,6 +184,30 @@ async def burn_page(request: Request, playlist_id: str):
             "request": request,
             "config": config,
             "playlist_id": playlist_id,
+            "album_id": None,
+            "source_type": "playlist",
+            "has_config": config is not None,
+        },
+    )
+
+
+@router.get("/burn/album/{album_id}", response_class=HTMLResponse)
+async def burn_album_page(request: Request, album_id: str):
+    """Burn workflow page for albums."""
+    templates = get_templates(request)
+    config = get_config(request)
+
+    if not config:
+        raise HTTPException(status_code=400, detail="Not configured")
+
+    return templates.TemplateResponse(
+        "burn.html",
+        {
+            "request": request,
+            "config": config,
+            "playlist_id": None,
+            "album_id": album_id,
+            "source_type": "album",
             "has_config": config is not None,
         },
     )
@@ -177,6 +243,106 @@ async def get_playlists(request: Request):
                 {
                     "request": request,
                     "playlists": playlists,
+                },
+            )
+    except Exception as e:
+        return templates.TemplateResponse(
+            "partials/error.html",
+            {"request": request, "message": str(e)},
+        )
+
+
+# =============================================================================
+# API Routes - Albums
+# =============================================================================
+
+
+@router.get("/api/albums", response_class=HTMLResponse)
+async def get_albums(request: Request):
+    """Fetch albums from Navidrome."""
+    templates = get_templates(request)
+    config = get_config(request)
+
+    if not config:
+        return templates.TemplateResponse(
+            "partials/error.html",
+            {"request": request, "message": "Not configured"},
+        )
+
+    try:
+        async with SubsonicClient(
+            base_url=config.navidrome.url,
+            username=config.navidrome.username,
+            password=config.navidrome.password,
+        ) as client:
+            albums = await client.get_albums()
+
+            return templates.TemplateResponse(
+                "partials/album_list.html",
+                {
+                    "request": request,
+                    "albums": albums,
+                },
+            )
+    except Exception as e:
+        return templates.TemplateResponse(
+            "partials/error.html",
+            {"request": request, "message": str(e)},
+        )
+
+
+@router.get("/api/album/{album_id}", response_class=HTMLResponse)
+async def get_album_details(request: Request, album_id: str):
+    """Get album details with tracks."""
+    templates = get_templates(request)
+    config = get_config(request)
+
+    if not config:
+        return templates.TemplateResponse(
+            "partials/error.html",
+            {"request": request, "message": "Not configured"},
+        )
+
+    try:
+        async with SubsonicClient(
+            base_url=config.navidrome.url,
+            username=config.navidrome.username,
+            password=config.navidrome.password,
+        ) as client:
+            album = await client.get_album(album_id)
+
+            # Create a plan to show disc breakdown
+            planner = DiscPlanningEngine(
+                disc_type=config.burning.disc_type,
+                disc_capacity_bytes=config.burning.disc_size_bytes,
+                disc_capacity_seconds=config.burning.audio_disc_seconds,
+            )
+
+            # Build size lookup from track data
+            # If conversion is enabled, estimate post-conversion MP3 sizes
+            quality = config.media.conversion_quality
+            size_lookup = {}
+            for t in album.tracks:
+                if quality != ConversionQuality.DISABLED and t.duration_seconds and t.format and t.format.lower() != "mp3":
+                    size_lookup[t.id] = estimate_mp3_size(t.duration_seconds, quality)
+                elif t.size_bytes:
+                    size_lookup[t.id] = t.size_bytes
+
+            try:
+                plan = planner.plan(album, size_lookup)
+                plan_summary = planner.get_plan_summary(plan)
+            except Exception:
+                plan = None
+                plan_summary = None
+
+            return templates.TemplateResponse(
+                "partials/album_details.html",
+                {
+                    "request": request,
+                    "album": album,
+                    "plan": plan,
+                    "plan_summary": plan_summary,
+                    "config": config,
                 },
             )
     except Exception as e:
@@ -235,6 +401,106 @@ async def get_playlist_details(request: Request, playlist_id: str):
                 {
                     "request": request,
                     "playlist": playlist,
+                    "plan": plan,
+                    "plan_summary": plan_summary,
+                    "config": config,
+                },
+            )
+    except Exception as e:
+        return templates.TemplateResponse(
+            "partials/error.html",
+            {"request": request, "message": str(e)},
+        )
+
+
+# =============================================================================
+# API Routes - Albums
+# =============================================================================
+
+
+@router.get("/api/albums", response_class=HTMLResponse)
+async def get_albums(request: Request):
+    """Fetch albums from Navidrome."""
+    templates = get_templates(request)
+    config = get_config(request)
+
+    if not config:
+        return templates.TemplateResponse(
+            "partials/error.html",
+            {"request": request, "message": "Not configured"},
+        )
+
+    try:
+        async with SubsonicClient(
+            base_url=config.navidrome.url,
+            username=config.navidrome.username,
+            password=config.navidrome.password,
+        ) as client:
+            albums = await client.get_albums()
+
+            return templates.TemplateResponse(
+                "partials/album_list.html",
+                {
+                    "request": request,
+                    "albums": albums,
+                },
+            )
+    except Exception as e:
+        return templates.TemplateResponse(
+            "partials/error.html",
+            {"request": request, "message": str(e)},
+        )
+
+
+@router.get("/api/album/{album_id}", response_class=HTMLResponse)
+async def get_album_details(request: Request, album_id: str):
+    """Get album details with tracks."""
+    templates = get_templates(request)
+    config = get_config(request)
+
+    if not config:
+        return templates.TemplateResponse(
+            "partials/error.html",
+            {"request": request, "message": "Not configured"},
+        )
+
+    try:
+        async with SubsonicClient(
+            base_url=config.navidrome.url,
+            username=config.navidrome.username,
+            password=config.navidrome.password,
+        ) as client:
+            album = await client.get_album(album_id)
+
+            # Create a plan to show disc breakdown
+            planner = DiscPlanningEngine(
+                disc_type=config.burning.disc_type,
+                disc_capacity_bytes=config.burning.disc_size_bytes,
+                disc_capacity_seconds=config.burning.audio_disc_seconds,
+            )
+
+            # Build size lookup from track data
+            # If conversion is enabled, estimate post-conversion MP3 sizes
+            quality = config.media.conversion_quality
+            size_lookup = {}
+            for t in album.tracks:
+                if quality != ConversionQuality.DISABLED and t.duration_seconds and t.format and t.format.lower() != "mp3":
+                    size_lookup[t.id] = estimate_mp3_size(t.duration_seconds, quality)
+                elif t.size_bytes:
+                    size_lookup[t.id] = t.size_bytes
+
+            try:
+                plan = planner.plan(album, size_lookup)
+                plan_summary = planner.get_plan_summary(plan)
+            except Exception:
+                plan = None
+                plan_summary = None
+
+            return templates.TemplateResponse(
+                "partials/album_details.html",
+                {
+                    "request": request,
+                    "album": album,
                     "plan": plan,
                     "plan_summary": plan_summary,
                     "config": config,
@@ -391,12 +657,13 @@ async def test_connection(request: Request):
         ) as client:
             await client.authenticate()
             playlists = await client.get_playlists()
+            albums = await client.get_albums(size=10)  # Just get first 10 to verify
 
             return templates.TemplateResponse(
                 "partials/success.html",
                 {
                     "request": request,
-                    "message": f"Connected! Found {len(playlists)} playlists.",
+                    "message": f"Connected! Found {len(playlists)} playlists and {len(albums)}+ albums.",
                 },
             )
     except Exception as e:
@@ -426,6 +693,9 @@ async def start_burn(request: Request, burn_request: BurnRequest):
     request.app.state.active_sessions[session_id] = {
         "playlist_id": burn_request.playlist_id,
         "playlist_name": burn_request.playlist_name,
+        "album_id": burn_request.album_id,
+        "album_name": burn_request.album_name,
+        "is_album": burn_request.is_album,
         "dry_run": burn_request.dry_run,
         "selected_discs": burn_request.selected_discs,  # None = all discs
         "status": "starting",
@@ -478,11 +748,20 @@ async def burn_stream(request: Request, session_id: str):
             async def run_burn():
                 try:
                     async with orchestrator:
-                        await orchestrator.run_playlist_burn(
-                            playlist_id=session["playlist_id"],
-                            event_handler=handle_event,
-                            selected_discs=session.get("selected_discs"),
-                        )
+                        if session.get("is_album") and session.get("album_id"):
+                            # Burn album
+                            await orchestrator.run_album_burn(
+                                album_id=session["album_id"],
+                                event_handler=handle_event,
+                                selected_discs=session.get("selected_discs"),
+                            )
+                        else:
+                            # Burn playlist
+                            await orchestrator.run_playlist_burn(
+                                playlist_id=session["playlist_id"],
+                                event_handler=handle_event,
+                                selected_discs=session.get("selected_discs"),
+                            )
                 except Exception as e:
                     session["events"].put_nowait(
                         {
@@ -570,6 +849,59 @@ async def get_burn_plan(request: Request, playlist_id: str):
             {
                 "request": request,
                 "playlist": playlist,
+                "plan": plan,
+                "plan_summary": plan_summary,
+            },
+        )
+    except Exception as e:
+        return templates.TemplateResponse(
+            "partials/error.html",
+            {"request": request, "message": str(e)},
+        )
+
+
+@router.get("/api/burn/plan/album/{album_id}", response_class=HTMLResponse)
+async def get_burn_plan_album(request: Request, album_id: str):
+    """Get burn plan for an album."""
+    templates = get_templates(request)
+    config = get_config(request)
+
+    if not config:
+        return templates.TemplateResponse(
+            "partials/error.html",
+            {"request": request, "message": "Not configured"},
+        )
+
+    try:
+        async with SubsonicClient(
+            base_url=config.navidrome.url,
+            username=config.navidrome.username,
+            password=config.navidrome.password,
+        ) as client:
+            album = await client.get_album(album_id)
+
+        planner = DiscPlanningEngine(
+            disc_type=config.burning.disc_type,
+            disc_capacity_bytes=config.burning.disc_size_bytes,
+            disc_capacity_seconds=config.burning.audio_disc_seconds,
+        )
+
+        # Build size lookup - estimate post-conversion sizes if conversion enabled
+        quality = config.media.conversion_quality
+        size_lookup = {}
+        for t in album.tracks:
+            if quality != ConversionQuality.DISABLED and t.duration_seconds and t.format and t.format.lower() != "mp3":
+                size_lookup[t.id] = estimate_mp3_size(t.duration_seconds, quality)
+            elif t.size_bytes:
+                size_lookup[t.id] = t.size_bytes
+        plan = planner.plan(album, size_lookup)
+        plan_summary = planner.get_plan_summary(plan)
+
+        return templates.TemplateResponse(
+            "partials/burn_plan.html",
+            {
+                "request": request,
+                "album": album,
                 "plan": plan,
                 "plan_summary": plan_summary,
             },

@@ -132,6 +132,20 @@
                                 </svg>
                                 Playlists
                             </a>
+                            <a href="/albums"
+                               class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md
+                                      {% if '/albums' in request.url.path %}
+                                      text-primary-700 bg-primary-50 dark:bg-primary-900/50 dark:text-primary-300
+                                      {% else %}
+                                      text-surface-600 hover:text-surface-900 hover:bg-surface-100
+                                      dark:text-surface-300 dark:hover:text-white dark:hover:bg-surface-700
+                                      {% endif %}">
+                                <svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                                    <circle cx="12" cy="12" r="3" stroke-width="2"/>
+                                </svg>
+                                Albums
+                            </a>
                             <a href="/settings"
                                class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md
                                       {% if '/settings' in request.url.path %}

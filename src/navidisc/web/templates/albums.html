@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Navidisc - Albums{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-surface-900 dark:text-white">Albums</h1>
+            <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
+                Select an album to view details and burn to disc
+            </p>
+        </div>
+        <button hx-get="/api/albums"
+                hx-target="#album-container"
+                hx-swap="innerHTML"
+                class="inline-flex items-center px-4 py-2 border border-surface-300 dark:border-surface-600 rounded-md 
+                       text-sm font-medium text-surface-700 dark:text-surface-200 
+                       bg-white dark:bg-surface-800 hover:bg-surface-50 dark:hover:bg-surface-700
+                       transition-colors duration-200">
+            <svg class="mr-2 h-4 w-4 htmx-indicator animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Refresh
+        </button>
+    </div>
+
+    <!-- Album Container -->
+    <div id="album-container"
+         hx-get="/api/albums"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <!-- Loading state -->
+        <div class="flex items-center justify-center py-12">
+            <svg class="animate-spin h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span class="ml-3 text-surface-600 dark:text-surface-300">Loading albums...</span>
+        </div>
+    </div>
+
+    <!-- Album Details Panel -->
+    <div id="album-details" class="hidden">
+        <!-- Details will be loaded here -->
+    </div>
+</div>
+{% endblock %}

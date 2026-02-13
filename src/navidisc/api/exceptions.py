@@ -23,6 +23,14 @@ class PlaylistNotFoundError(SubsonicError):
         self.identifier = identifier
 
 
+class AlbumNotFoundError(SubsonicError):
+    """Requested album was not found."""
+
+    def __init__(self, identifier: str):
+        super().__init__(f"Album not found: {identifier}")
+        self.identifier = identifier
+
+
 class ConnectionError(SubsonicError):
     """Could not connect to server."""
     pass

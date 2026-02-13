@@ -1,16 +1,22 @@
 <!-- Burn plan partial - loaded via HTMX -->
+{% set source = album if album else playlist %}
+{% set source_type = 'album' if album else 'playlist' %}
 <div id="burn-plan-content" 
-     data-playlist-name="{{ playlist.name }}"
+     data-playlist-name="{{ playlist.name if playlist else '' }}"
+     data-album-name="{{ album.name if album else '' }}"
      class="bg-white dark:bg-surface-800 rounded-xl shadow-sm border border-surface-200 dark:border-surface-700 overflow-hidden">
     <!-- Header -->
     <div class="px-6 py-4 border-b border-surface-200 dark:border-surface-700">
         <h2 class="text-xl font-bold text-surface-900 dark:text-white">
-            {{ playlist.name }}
+            {{ source.name }}
         </h2>
         <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
-            {{ playlist.tracks|length }} tracks
-            {% if playlist.duration_seconds %}
-            · {{ (playlist.duration_seconds / 60)|int }} minutes
+            {% if album %}
+            {% if album.artist %}{{ album.artist }} · {% endif %}
+            {% endif %}
+            {{ source.tracks|length }} tracks
+            {% if source.duration_seconds %}
+            · {{ (source.duration_seconds / 60)|int }} minutes
             {% endif %}
         </p>
     </div>
@@ -151,7 +157,7 @@
                     <div class="px-4 py-2 border-t border-surface-100 dark:border-surface-700 bg-surface-50 dark:bg-surface-800/50">
                         <ul class="space-y-1 text-sm">
                             {% for track_id in disc.track_ids %}
-                            {% set track = (playlist.tracks | selectattr('id', 'equalto', track_id) | list | first) if playlist.tracks else none %}
+                            {% set track = (source.tracks | selectattr('id', 'equalto', track_id) | list | first) if source.tracks else none %}
                             {% if track %}
                             <li class="flex items-center py-1 text-surface-600 dark:text-surface-300">
                                 <span class="w-6 text-surface-400">{{ loop.index }}.</span>

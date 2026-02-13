@@ -6,7 +6,7 @@
 <div x-data="burnWorkflow()" class="max-w-4xl mx-auto space-y-6">
     <!-- Header -->
     <div class="flex items-center">
-        <a href="/playlists" class="mr-4 p-2 rounded-md hover:bg-surface-100 dark:hover:bg-surface-700 transition-colors">
+        <a href="{% if source_type == 'album' %}/albums{% else %}/playlists{% endif %}" class="mr-4 p-2 rounded-md hover:bg-surface-100 dark:hover:bg-surface-700 transition-colors">
             <svg class="h-5 w-5 text-surface-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
             </svg>
@@ -14,14 +14,14 @@
         <div>
             <h1 class="text-2xl font-bold text-surface-900 dark:text-white">Burn to Disc</h1>
             <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
-                Review and burn your playlist
+                Review and burn your {% if source_type == 'album' %}album{% else %}playlist{% endif %}
             </p>
         </div>
     </div>
 
     <!-- Burn Plan -->
     <div id="burn-plan"
-         hx-get="/api/burn/plan/{{ playlist_id }}"
+         hx-get="{% if source_type == 'album' %}/api/burn/plan/album/{{ album_id }}{% else %}/api/burn/plan/{{ playlist_id }}{% endif %}"
          hx-trigger="load"
          hx-swap="innerHTML">
         <div class="flex items-center justify-center py-12">
@@ -65,7 +65,7 @@
                   x-text="getSelectedDiscsDisplay()">
             </span>
         </div>
-        <button @click="startBurn('{{ playlist_id }}')"
+        <button @click="startBurn('{{ playlist_id }}', '{{ album_id }}', '{{ source_type }}')"
                 :disabled="burning || selectedDiscs.length === 0"
                 class="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm 
                        text-base font-medium text-white bg-red-600 hover:bg-red-700 
@@ -174,14 +174,14 @@
                     <span x-text="dryRun ? 'Dry Run Complete' : 'Burn Complete'"></span>
                 </h3>
                 <p class="mt-2 text-sm text-green-700 dark:text-green-300">
-                    <span x-text="dryRun ? 'The dry run completed successfully. Your disc is ready to burn.' : 'Your playlist has been successfully burned to disc.'"></span>
+                    <span x-text="dryRun ? 'The dry run completed successfully. Your disc is ready to burn.' : 'Your {{ source_type|default('playlist') }} has been successfully burned to disc.'"></span>
                 </p>
-                <a href="/playlists" 
+                <a href="{% if source_type == 'album' %}/albums{% else %}/playlists{% endif %}" 
                    class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md 
                           text-green-800 bg-green-200 hover:bg-green-300 
                           dark:text-green-900 dark:bg-green-400 dark:hover:bg-green-500
                           transition-colors duration-200">
-                    Back to Playlists
+                    Back to {% if source_type == 'album' %}Albums{% else %}Playlists{% endif %}
                 </a>
             </div>
         </div>
@@ -260,9 +260,9 @@ function burnWorkflow() {
             });
         },
         
-        getPlaylistName() {
+        getSourceName() {
             const planEl = document.getElementById('burn-plan-content');
-            return planEl ? planEl.dataset.playlistName : 'Playlist';
+            return planEl ? (planEl.dataset.albumName || planEl.dataset.playlistName || 'Unknown') : 'Unknown';
         },
         
         getSelectedDiscsDisplay() {
@@ -280,7 +280,7 @@ function burnWorkflow() {
             return `Disc${this.selectedDiscs.length > 1 ? 's' : ''} ${this.selectedDiscs.join(', ')}`;
         },
 
-        async startBurn(playlistId) {
+        async startBurn(playlistId, albumId, sourceType) {
             // Sync selection from DOM to ensure we have latest state
             this.syncDiscSelection();
             
@@ -296,25 +296,35 @@ function burnWorkflow() {
             this.progress = 0;
             this.events = [];
             
-            const playlistName = this.getPlaylistName();
+            const sourceName = this.getSourceName();
             const discInfo = this.selectedDiscs.length === this.totalDiscs 
                 ? 'all discs' 
                 : `disc(s) ${this.selectedDiscs.join(', ')}`;
-            this.addEvent('info', `Starting burn for "${playlistName}" (${discInfo})...`);
+            this.addEvent('info', `Starting burn for "${sourceName}" (${discInfo})...`);
 
             try {
+                // Build request body based on source type
+                const isAlbum = sourceType === 'album';
+                const requestBody = {
+                    dry_run: this.dryRun,
+                    selected_discs: this.selectedDiscs.length > 0 ? this.selectedDiscs : null
+                };
+                
+                if (isAlbum) {
+                    requestBody.album_id = albumId;
+                    requestBody.album_name = sourceName;
+                } else {
+                    requestBody.playlist_id = playlistId;
+                    requestBody.playlist_name = sourceName;
+                }
+
                 // Start burn session with selected discs
                 const response = await fetch('/api/burn/start', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        playlist_id: playlistId,
-                        playlist_name: playlistName,
-                        dry_run: this.dryRun,
-                        selected_discs: this.selectedDiscs.length > 0 ? this.selectedDiscs : null
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (!response.ok) {

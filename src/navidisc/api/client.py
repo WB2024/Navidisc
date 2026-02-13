@@ -14,13 +14,14 @@ from typing import Any
 import httpx
 
 from navidisc.api.exceptions import (
+    AlbumNotFoundError,
     APIError,
     AuthenticationError,
     ConnectionError,
     PlaylistNotFoundError,
     SubsonicError,
 )
-from navidisc.models import Playlist, Track
+from navidisc.models import Album, Playlist, Track
 
 
 class SubsonicClient:
@@ -357,6 +358,107 @@ class SubsonicClient:
                 return await self.get_playlist(playlist.id)
 
         raise PlaylistNotFoundError(name)
+
+    async def get_albums(
+        self,
+        type: str = "alphabeticalByName",
+        size: int = 500,
+        offset: int = 0,
+    ) -> list[Album]:
+        """Get albums from the server.
+
+        Args:
+            type: Sort order. Options: 'alphabeticalByName', 'alphabeticalByArtist',
+                  'recent', 'newest', 'frequent', 'random', 'starred', 'byYear', 'byGenre'.
+            size: Maximum number of albums to return.
+            offset: Offset for paging.
+
+        Returns:
+            List of Album objects (without full track details).
+        """
+        response = await self._request("getAlbumList2", {
+            "type": type,
+            "size": size,
+            "offset": offset,
+        })
+        albums_data = response.get("albumList2", {}).get("album", [])
+
+        # Handle single album (not returned as list)
+        if isinstance(albums_data, dict):
+            albums_data = [albums_data]
+
+        albums = []
+        for a in albums_data:
+            albums.append(Album(
+                id=str(a.get("id")),
+                name=a.get("name", a.get("title", "")),
+                artist=a.get("artist"),
+                artist_id=a.get("artistId"),
+                year=a.get("year"),
+                genre=a.get("genre"),
+                track_count=a.get("songCount", 0),
+                duration_seconds=a.get("duration", 0),
+                cover_art=a.get("coverArt"),
+            ))
+
+        return albums
+
+    async def get_album(self, album_id: str) -> Album:
+        """Get an album with full track details.
+
+        Args:
+            album_id: ID of the album to retrieve.
+
+        Returns:
+            Album with tracks populated.
+
+        Raises:
+            AlbumNotFoundError: If album doesn't exist.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            response = await self._request("getAlbum", {"id": album_id})
+        except APIError as e:
+            if e.code == 70:  # Data not found
+                raise AlbumNotFoundError(album_id)
+            raise
+
+        album_data = response.get("album", {})
+        tracks_data = album_data.get("song", [])
+
+        # Handle single track (not returned as list)
+        if isinstance(tracks_data, dict):
+            tracks_data = [tracks_data]
+
+        tracks = [self._parse_track(t) for t in tracks_data]
+
+        # Try to fetch real file paths from Navidrome's native API
+        logger.info(f"=== Fetching real file paths for {len(tracks)} tracks from Navidrome API ===")
+
+        for track in tracks:
+            real_path = await self._fetch_navidrome_song_path(track.id)
+            if real_path:
+                logger.info(f"Track '{track.title}': path updated '{track.path}' -> '{real_path}'")
+                track.path = real_path
+            else:
+                logger.warning(f"Track '{track.title}': NO PATH from Navidrome API, keeping '{track.path}'")
+
+        logger.info(f"=== Finished fetching paths ===")
+
+        return Album(
+            id=str(album_data.get("id")),
+            name=album_data.get("name", album_data.get("title", "")),
+            artist=album_data.get("artist"),
+            artist_id=album_data.get("artistId"),
+            year=album_data.get("year"),
+            genre=album_data.get("genre"),
+            track_count=album_data.get("songCount", 0),
+            duration_seconds=album_data.get("duration", 0),
+            cover_art=album_data.get("coverArt"),
+            tracks=tracks,
+        )
 
     def _parse_track(self, data: dict[str, Any]) -> Track:
         """Parse track data from API response.

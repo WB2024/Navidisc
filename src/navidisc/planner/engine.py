@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 from enum import StrEnum
 
-from navidisc.models import BurnPlan, DiscPlan, DiscType, Playlist, Track
+from navidisc.models import Album, BurnPlan, DiscPlan, DiscType, Playlist, Track
 
 logger = logging.getLogger(__name__)
 
@@ -119,13 +119,13 @@ class DiscPlanningEngine:
 
     def plan(
         self,
-        playlist: Playlist,
+        source: Playlist | Album,
         track_sizes: dict[str, int] | None = None,
     ) -> BurnPlan:
-        """Create a burn plan for a playlist.
+        """Create a burn plan for a playlist or album.
 
         Args:
-            playlist: Playlist to plan.
+            source: Playlist or Album to plan.
             track_sizes: Dictionary mapping track IDs to file sizes in bytes.
                         Required for data discs if tracks don't have size info.
 
@@ -135,14 +135,14 @@ class DiscPlanningEngine:
         Raises:
             PlanningError: If planning fails.
         """
-        if not playlist.tracks:
-            raise PlanningError("Playlist has no tracks")
+        if not source.tracks:
+            raise PlanningError(f"{type(source).__name__} has no tracks")
 
         # Build size/duration lookup
         size_lookup = track_sizes or {}
 
         # Verify we have required info
-        for track in playlist.tracks:
+        for track in source.tracks:
             if self.disc_type == DiscType.DATA:
                 size = size_lookup.get(track.id) or track.size_bytes
                 if not size:
@@ -157,13 +157,18 @@ class DiscPlanningEngine:
 
         # Plan using selected strategy
         if self.strategy == PlanningStrategy.GREEDY_SEQUENTIAL:
-            discs = self._plan_greedy_sequential(playlist.tracks, size_lookup)
+            discs = self._plan_greedy_sequential(source.tracks, size_lookup)
         else:
             raise PlanningError(f"Unknown planning strategy: {self.strategy}")
 
+        # Determine source type and set appropriate fields
+        is_album = isinstance(source, Album)
+
         return BurnPlan(
-            playlist_id=playlist.id,
-            playlist_name=playlist.name,
+            playlist_id=None if is_album else source.id,
+            playlist_name=None if is_album else source.name,
+            album_id=source.id if is_album else None,
+            album_name=source.name if is_album else None,
             disc_type=self.disc_type,
             disc_capacity_bytes=self.disc_capacity_bytes,
             disc_capacity_seconds=self.disc_capacity_seconds,

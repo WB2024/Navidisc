@@ -180,6 +180,10 @@ class Album(BaseModel):
     artist_id: str | None = None
     year: int | None = None
     genre: str | None = None
+    track_count: int = 0
+    duration_seconds: int = 0
+    cover_art: str | None = None
+    tracks: list["Track"] = Field(default_factory=list)
 
 
 class Track(BaseModel):
@@ -232,14 +236,26 @@ class DiscPlan(BaseModel):
 
 
 class BurnPlan(BaseModel):
-    """Complete plan for burning a playlist to one or more discs."""
-    playlist_id: str
-    playlist_name: str
+    """Complete plan for burning a playlist or album to one or more discs."""
+    playlist_id: str | None = None
+    playlist_name: str | None = None
+    album_id: str | None = None
+    album_name: str | None = None
     disc_type: DiscType
     disc_capacity_bytes: int | None = None  # For data discs
     disc_capacity_seconds: int | None = None  # For audio discs
     discs: list[DiscPlan] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
+
+    @property
+    def source_name(self) -> str:
+        """Get the name of the source (playlist or album)."""
+        return self.playlist_name or self.album_name or "Unknown"
+
+    @property
+    def source_type(self) -> str:
+        """Get the type of source (playlist or album)."""
+        return "album" if self.album_id else "playlist"
 
     @property
     def total_discs(self) -> int:
@@ -314,9 +330,15 @@ class SessionState(BaseModel):
     session_id: str
     state: OrchestratorState
     playlist_id: str | None = None
+    album_id: str | None = None
     burn_plan: BurnPlan | None = None
     current_disc: int = 0
     burn_results: list[BurnResult] = Field(default_factory=list)
     errors: list[NavidiscError] = Field(default_factory=list)
     started_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
+    
+    @property
+    def source_type(self) -> str:
+        """Whether burning a playlist or album."""
+        return "album" if self.album_id else "playlist"

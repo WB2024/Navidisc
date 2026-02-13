@@ -6,6 +6,7 @@ and other Subsonic-compatible servers.
 
 from navidisc.api.client import SubsonicClient
 from navidisc.api.exceptions import (
+    AlbumNotFoundError,
     AuthenticationError,
     ConnectionError,
     PlaylistNotFoundError,
@@ -16,6 +17,7 @@ __all__ = [
     "SubsonicClient",
     "SubsonicError",
     "AuthenticationError",
+    "AlbumNotFoundError",
     "PlaylistNotFoundError",
     "ConnectionError",
 ]

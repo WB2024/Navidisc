@@ -25,6 +25,7 @@ from navidisc.media import AudioConverter, Downloader, MediaResolver, ResolvedTr
 from navidisc.media.converter import estimate_mp3_size, estimate_mp3_size_from_file, ffprobe_duration
 from navidisc.media.resolver import ResolveMethod
 from navidisc.models import (
+    Album,
     BurnPlan,
     BurnStatus,
     ConversionQuality,
@@ -122,7 +123,8 @@ class Orchestrator:
         self._burner: BurnerAdapter | None = None
 
         # Workflow data
-        self._playlist: Playlist | None = None
+        self._source: Playlist | Album | None = None  # Can be playlist or album
+        self._is_album: bool = False  # Whether burning an album
         self._resolved_tracks: list[ResolvedTrack] | None = None
         self._track_paths: dict[str, Path] = {}
         self._staged_discs: dict[int, Any] = {}  # keyed by disc number
@@ -294,56 +296,17 @@ class Orchestrator:
             raise ValueError("Must provide playlist_name or playlist_id")
 
         self._event_callback = event_handler
+        self._is_album = False
 
         try:
             # Step 1: Authenticate
             await self._step_authenticate()
 
             # Step 2: Fetch playlist metadata
-            await self._step_fetch_playlist(playlist_name, playlist_id)
+            await self._step_fetch_source(playlist_name=playlist_name, playlist_id=playlist_id)
 
-            # Step 3: Resolve ALL tracks (determine local vs download, no actual downloading)
-            await self._step_resolve_all_tracks()
-
-            # Step 4: Plan discs (using actual/estimated sizes accounting for conversion)
-            await self._step_plan()
-
-            # Step 5: Determine which discs to burn
-            total_discs = self.session.burn_plan.total_discs
-            if selected_discs:
-                # Filter to only selected discs (validate they exist in plan)
-                discs_to_burn = [d for d in selected_discs if 1 <= d <= total_discs]
-                discs_to_burn.sort()  # Burn in order
-                logger.info(f"Burning selected discs: {discs_to_burn} of {total_discs} total")
-            else:
-                # Burn all discs
-                discs_to_burn = list(range(1, total_discs + 1))
-                logger.info(f"Burning all {total_discs} disc(s)")
-
-            # Step 6: Get track IDs from selected discs only
-            selected_track_ids = set()
-            for disc_num in discs_to_burn:
-                disc_plan = self.session.burn_plan.discs[disc_num - 1]
-                selected_track_ids.update(disc_plan.track_ids)
-            
-            logger.info(f"Selected discs contain {len(selected_track_ids)} tracks to prepare")
-
-            # Step 7: Download and convert only selected tracks
-            await self._step_prepare_selected_tracks(selected_track_ids)
-
-            # Step 8: Stage and burn each selected disc
-            for disc_number in discs_to_burn:
-                await self._step_stage_disc(disc_number)
-                await self._step_burn_disc(disc_number)
-
-            # Complete
-            self._set_state(OrchestratorState.COMPLETE)
-            self._emit(OrchestratorEvent.COMPLETE, {
-                "session_id": self.session.session_id,
-                "total_discs": len(discs_to_burn),
-                "selected_discs": discs_to_burn,
-                "results": [r.model_dump(mode='json') for r in self.session.burn_results],
-            })
+            # Step 3-8: Common burn workflow
+            await self._run_common_burn_workflow(selected_discs)
 
         except Exception as e:
             self._set_state(OrchestratorState.ERROR)
@@ -361,6 +324,100 @@ class Orchestrator:
 
         return self.session
 
+    async def run_album_burn(
+        self,
+        album_id: str,
+        event_handler: EventCallback | None = None,
+        selected_discs: list[int] | None = None,
+    ) -> SessionState:
+        """Run the complete album burn workflow.
+
+        Args:
+            album_id: ID of album to burn.
+            event_handler: Callback for workflow events.
+            selected_discs: List of disc numbers to burn (1-indexed). If None, burn all.
+
+        Returns:
+            Final session state.
+        """
+        self._event_callback = event_handler
+        self._is_album = True
+
+        try:
+            # Step 1: Authenticate
+            await self._step_authenticate()
+
+            # Step 2: Fetch album metadata
+            await self._step_fetch_source(album_id=album_id)
+
+            # Step 3-8: Common burn workflow
+            await self._run_common_burn_workflow(selected_discs)
+
+        except Exception as e:
+            self._set_state(OrchestratorState.ERROR)
+            self._add_error(
+                error_type=type(e).__name__,
+                message=str(e),
+                suggested_action="Check logs for details",
+            )
+            raise
+
+        finally:
+            # Clean up downloaded/converted files if auto-cleanup is enabled
+            if self.config.media.auto_cleanup:
+                self._cleanup_local_files()
+
+        return self.session
+
+    async def _run_common_burn_workflow(self, selected_discs: list[int] | None = None) -> None:
+        """Run the common burn workflow steps (resolve, plan, download, burn).
+        
+        Args:
+            selected_discs: List of disc numbers to burn (1-indexed). If None, burn all.
+        """
+        # Step 3: Resolve ALL tracks (determine local vs download, no actual downloading)
+        await self._step_resolve_all_tracks()
+
+        # Step 4: Plan discs (using actual/estimated sizes accounting for conversion)
+        await self._step_plan()
+
+        # Step 5: Determine which discs to burn
+        total_discs = self.session.burn_plan.total_discs
+        if selected_discs:
+            # Filter to only selected discs (validate they exist in plan)
+            discs_to_burn = [d for d in selected_discs if 1 <= d <= total_discs]
+            discs_to_burn.sort()  # Burn in order
+            logger.info(f"Burning selected discs: {discs_to_burn} of {total_discs} total")
+        else:
+            # Burn all discs
+            discs_to_burn = list(range(1, total_discs + 1))
+            logger.info(f"Burning all {total_discs} disc(s)")
+
+        # Step 6: Get track IDs from selected discs only
+        selected_track_ids = set()
+        for disc_num in discs_to_burn:
+            disc_plan = self.session.burn_plan.discs[disc_num - 1]
+            selected_track_ids.update(disc_plan.track_ids)
+        
+        logger.info(f"Selected discs contain {len(selected_track_ids)} tracks to prepare")
+
+        # Step 7: Download and convert only selected tracks
+        await self._step_prepare_selected_tracks(selected_track_ids)
+
+        # Step 8: Stage and burn each selected disc
+        for disc_number in discs_to_burn:
+            await self._step_stage_disc(disc_number)
+            await self._step_burn_disc(disc_number)
+
+        # Complete
+        self._set_state(OrchestratorState.COMPLETE)
+        self._emit(OrchestratorEvent.COMPLETE, {
+            "session_id": self.session.session_id,
+            "total_discs": len(discs_to_burn),
+            "selected_discs": discs_to_burn,
+            "results": [r.model_dump(mode='json') for r in self.session.burn_results],
+        })
+
     async def _step_authenticate(self) -> None:
         """Authenticate with Navidrome."""
         client = self._get_api_client()
@@ -376,32 +433,45 @@ class Orchestrator:
         self._set_state(OrchestratorState.AUTHENTICATED)
         logger.debug("Authentication successful")
 
-    async def _step_fetch_playlist(
+    async def _step_fetch_source(
         self,
-        name: str | None,
-        playlist_id: str | None,
+        playlist_name: str | None = None,
+        playlist_id: str | None = None,
+        album_id: str | None = None,
     ) -> None:
-        """Fetch playlist metadata (no downloading yet)."""
+        """Fetch playlist or album metadata (no downloading yet)."""
         client = self._get_api_client()
 
-        # Fetch playlist
-        logger.debug(f"Fetching playlist: name={name}, id={playlist_id}")
-        self._emit(OrchestratorEvent.PROGRESS, {
-            "step": "fetch_playlist",
-            "message": "Fetching playlist...",
-        })
+        if album_id:
+            # Fetch album
+            logger.debug(f"Fetching album: id={album_id}")
+            self._emit(OrchestratorEvent.PROGRESS, {
+                "step": "fetch_album",
+                "message": "Fetching album...",
+            })
 
-        if playlist_id:
-            self._playlist = await client.get_playlist(playlist_id)
+            self._source = await client.get_album(album_id)
+            self.session.album_id = self._source.id
+            logger.info(f"Album loaded: '{self._source.name}' ({len(self._source.tracks)} tracks)")
         else:
-            self._playlist = await client.get_playlist_by_name(name)
+            # Fetch playlist
+            logger.debug(f"Fetching playlist: name={playlist_name}, id={playlist_id}")
+            self._emit(OrchestratorEvent.PROGRESS, {
+                "step": "fetch_playlist",
+                "message": "Fetching playlist...",
+            })
 
-        self.session.playlist_id = self._playlist.id
-        logger.info(f"Playlist loaded: '{self._playlist.name}' ({len(self._playlist.tracks)} tracks)")
+            if playlist_id:
+                self._source = await client.get_playlist(playlist_id)
+            else:
+                self._source = await client.get_playlist_by_name(playlist_name)
+
+            self.session.playlist_id = self._source.id
+            logger.info(f"Playlist loaded: '{self._source.name}' ({len(self._source.tracks)} tracks)")
         
         # Log first track's path for debugging
-        if self._playlist.tracks:
-            first_track = self._playlist.tracks[0]
+        if self._source.tracks:
+            first_track = self._source.tracks[0]
             logger.debug(f"Example track path from Navidrome: {first_track.path}")
 
     async def _step_resolve_all_tracks(self) -> None:
@@ -415,11 +485,11 @@ class Orchestrator:
 
         self._emit(OrchestratorEvent.PROGRESS, {
             "step": "resolve_tracks",
-            "message": f"Resolving {len(self._playlist.tracks)} tracks...",
+            "message": f"Resolving {len(self._source.tracks)} tracks...",
         })
 
         self._resolved_tracks = resolver.resolve_many(
-            self._playlist.tracks,
+            self._source.tracks,
             lambda track_id: client.get_download_url(track_id),
         )
         
@@ -585,7 +655,7 @@ class Orchestrator:
         total_size = sum(size_lookup.values())
         logger.info(f"Total planned size: {total_size} bytes ({total_size / 1024 / 1024:.2f} MB)")
 
-        plan = planner.plan(self._playlist, size_lookup)
+        plan = planner.plan(self._source, size_lookup)
         self.session.burn_plan = plan
         logger.info(f"Burn plan created: {plan.total_discs} disc(s) required")
         logger.debug(f"Plan details: disc_type={plan.disc_type}, capacity={plan.disc_capacity_bytes or plan.disc_capacity_seconds}")
@@ -615,7 +685,7 @@ class Orchestrator:
         })
 
         # Build track lookup
-        track_lookup = {t.id: t for t in self._playlist.tracks}
+        track_lookup = {t.id: t for t in self._source.tracks}
 
         # Different staging for audio CDs vs data discs
         if self.config.burning.disc_type == DiscType.AUDIO:
@@ -906,7 +976,7 @@ class Orchestrator:
                 title=track.title,
                 artist=track.artist,
                 duration_seconds=duration,
-                album=self._playlist.name if self._playlist else "",
+                album=self._source.name if self._source else "",
             ))
             
             self._emit(OrchestratorEvent.PROGRESS, {
@@ -918,7 +988,7 @@ class Orchestrator:
         
         # Generate TOC file for cdrdao
         toc_path = disc_dir / "disc.toc"
-        album_title = f"{self._playlist.name} - Disc {disc_number}" if self._playlist else f"Disc {disc_number}"
+        album_title = f"{self._source.name} - Disc {disc_number}" if self._source else f"Disc {disc_number}"
         
         write_toc_file(
             output_path=toc_path,
@@ -958,15 +1028,15 @@ class Orchestrator:
         Returns:
             Path to the exported file, or None if export failed.
         """
-        if not self._playlist:
-            logger.warning("Cannot export track list: no playlist loaded")
+        if not self._source:
+            logger.warning("Cannot export track list: no source loaded")
             return None
         
         # Build track lookup
-        track_lookup = {t.id: t for t in self._playlist.tracks}
+        track_lookup = {t.id: t for t in self._source.tracks}
         
-        # Sanitize playlist name for filename
-        safe_name = self._sanitize_filename(self._playlist.name)
+        # Sanitize source name for filename
+        safe_name = self._sanitize_filename(self._source.name)
         filename = f"{safe_name} - Disc {disc_number:02d}.txt"
         
         # Write to staging directory
@@ -974,7 +1044,7 @@ class Orchestrator:
         
         try:
             lines = []
-            lines.append(f"{self._playlist.name} - Disc {disc_number}")
+            lines.append(f"{self._source.name} - Disc {disc_number}")
             lines.append("=" * len(lines[0]))
             lines.append("")
             
