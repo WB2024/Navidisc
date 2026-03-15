@@ -211,15 +211,21 @@ class SubsonicClient:
     async def _fetch_navidrome_song_path(self, song_id: str) -> str | None:
         """Fetch the real file path from Navidrome's native API.
         
-        Navidrome has a native REST API at /api/inspect that returns the actual
-        filesystem path, unlike the Subsonic API which returns a simulated path
-        based on metadata (Artist/Album/Track format).
+        Navidrome's native /api/song endpoint returns the actual filesystem path,
+        unlike the Subsonic API which returns a simulated path based on ID3 tags.
+        
+        The /api/song endpoint returns:
+        - libraryPath: The library root inside Navidrome (e.g., /music for Docker)
+        - path: The relative path from libraryPath (e.g., D/Artist/Album/track.flac)
+        
+        We return just the relative 'path' field, which the resolver will combine
+        with the user's local_library_path configuration.
         
         Args:
             song_id: The song/track ID.
             
         Returns:
-            The actual file path, or None if not available.
+            The relative file path from the library root, or None if not available.
         """
         import logging
         logger = logging.getLogger(__name__)
@@ -233,24 +239,26 @@ class SubsonicClient:
                 logger.warning("Could not get Navidrome token, cannot fetch real file path")
                 return None
             
-            # Use the /api/inspect endpoint with id as query param
-            url = f"{self.base_url}/api/inspect"
+            # Use /api/song/{id} endpoint - returns libraryPath and path fields
+            url = f"{self.base_url}/api/song/{song_id}"
             headers = {"x-nd-authorization": f"Bearer {token}"}
-            params = {"id": song_id}
             
-            logger.info(f"Calling Navidrome API: {url}?id={song_id}")
-            response = await client.get(url, headers=headers, params=params)
-            logger.info(f"Navidrome API response status: {response.status_code}")
+            logger.debug(f"Calling Navidrome API: {url}")
+            response = await client.get(url, headers=headers)
             
             if response.status_code == 200:
                 data = response.json()
-                # The file path is in the "file" field
-                real_path = data.get("file")
-                logger.info(f"Navidrome API returned file: {real_path}")
-                if real_path:
-                    return real_path
+                # The 'path' field is the relative path from libraryPath
+                # e.g., "D/Dre, Dr_/[1992] The Chronic/05 - Dr. Dre. Track.flac"
+                relative_path = data.get("path")
+                library_path = data.get("libraryPath", "")
+                
+                if relative_path:
+                    logger.info(f"Navidrome API: libraryPath='{library_path}', path='{relative_path}'")
+                    return relative_path
+                    
             else:
-                logger.warning(f"Navidrome API returned {response.status_code} for song {song_id}: {response.text[:200]}")
+                logger.warning(f"Navidrome API returned {response.status_code} for song {song_id}")
                 
         except Exception as e:
             logger.error(f"Failed to fetch path from Navidrome API: {e}")
