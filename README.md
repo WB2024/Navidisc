@@ -125,7 +125,7 @@ Navidisc includes a modern web-based GUI for a more visual experience.
 # Install web dependencies
 pip install navidisc[web]
 
-# Start the web interface
+# Start the web interface (localhost only)
 navidisc web
 
 # Or specify host and port
@@ -134,9 +134,67 @@ navidisc web --host 0.0.0.0 --port 8080
 
 Then open `http://localhost:8080` in your browser.
 
+### Network Access (Access from Another Machine)
+
+To access the web interface from another device on your network (e.g., a laptop, phone, or another computer):
+
+#### 1. Start with network binding
+
+```bash
+# Bind to all network interfaces (required for external access)
+navidisc web --host 0.0.0.0 --port 8080
+```
+
+The `--host 0.0.0.0` flag is essential - by default, the server only accepts connections from localhost (`127.0.0.1`).
+
+#### 2. Find your host machine's IP address
+
+**Linux:**
+```bash
+ip addr show | grep "inet "
+# or
+hostname -I
+```
+
+**Windows:**
+```powershell
+ipconfig
+# Look for "IPv4 Address" (e.g., 192.168.1.100)
+```
+
+**macOS:**
+```bash
+ipconfig getifaddr en0
+```
+
+#### 3. Access from the other device
+
+Open a browser on the other device and navigate to:
+```
+http://<host-ip>:8080
+```
+
+For example: `http://192.168.1.100:8080`
+
+#### Firewall Configuration
+
+If you cannot connect, you may need to allow the port through your firewall:
+
+**Linux (UFW):**
+```bash
+sudo ufw allow 8080/tcp
+```
+
+**Windows:**
+```powershell
+# Run as Administrator
+New-NetFirewallRule -DisplayName "Navidisc Web" -Direction Inbound -Port 8080 -Protocol TCP -Action Allow
+```
+
 ### Web Interface Features
 
 - 📋 **Browse Playlists** - View all playlists from your Navidrome server
+- 💿 **Browse Albums** - View and burn albums directly from your library
 - 📊 **Plan Visualization** - See how tracks will be split across discs
 - 🔥 **Burn Workflow** - Real-time progress during burns
 - ⚙️ **Settings UI** - Configure Navidrome connection and burn options
