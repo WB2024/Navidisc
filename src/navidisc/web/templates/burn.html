@@ -219,7 +219,7 @@
 <script>
 function burnWorkflow() {
     return {
-        dryRun: true,
+        dryRun: false,
         burning: false,
         complete: false,
         error: false,
@@ -433,7 +433,13 @@ function burnWorkflow() {
                     break;
                     
                 case 'burn_completed':
-                    this.addEvent('success', `Disc ${eventData.disc_number || ''} burned successfully`);
+                    if (eventData.result && eventData.result.status === 'failed') {
+                        this.addEvent('error', `Disc ${eventData.disc_number || ''} burn failed: ${eventData.result.error_message || 'unknown error'}`);
+                        this.error = true;
+                        this.currentStatus = 'Failed';
+                    } else {
+                        this.addEvent('success', `Disc ${eventData.disc_number || ''} burned successfully`);
+                    }
                     this.progress = 95;
                     break;
                     
