@@ -31,8 +31,30 @@ router = APIRouter()
 
 
 def get_templates(request: Request):
-    """Get Jinja2 templates from app state."""
-    return request.app.state.templates
+    """Get Jinja2 templates from app state.
+
+    Returns a compatibility wrapper that supports the old Starlette
+    TemplateResponse(name, context) calling convention.
+    """
+    templates = request.app.state.templates
+
+    class _Compat:
+        def __init__(self, t):
+            self._t = t
+
+        def TemplateResponse(self, name_or_request, context_or_name=None, **kwargs):
+            if isinstance(name_or_request, str):
+                context = context_or_name or {}
+                req = context.pop("request", None)
+                if req is None:
+                    raise ValueError("request must be in context")
+                return self._t.TemplateResponse(req, name_or_request, context, **kwargs)
+            return self._t.TemplateResponse(name_or_request, context_or_name, **kwargs)
+
+        def __getattr__(self, name):
+            return getattr(self._t, name)
+
+    return _Compat(templates)
 
 
 def get_config(request: Request) -> NavidiscConfig | None:

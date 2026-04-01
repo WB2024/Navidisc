@@ -263,6 +263,7 @@ class Orchestrator:
                 write_speed=self.config.burning.write_speed,
                 custom_speed=self.config.burning.custom_speed,
                 dry_run=self.dry_run,
+                device=self.config.burning.device,
                 # Audio CD settings
                 audio_burn_mode=self.config.burning.audio_burn_mode.value,
                 audio_gap_seconds=self.config.burning.track_gap_seconds,

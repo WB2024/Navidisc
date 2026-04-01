@@ -11,6 +11,7 @@ This module provides:
 import asyncio
 import logging
 import shutil
+import subprocess
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from datetime import datetime
@@ -1246,12 +1247,38 @@ def _is_bd_media(media_type: MediaType) -> bool:
     return media_type.value.startswith("bd-")
 
 
+def _probe_media_family(device: str = "/dev/sr0") -> str | None:
+    """Probe the drive to detect what media family is inserted.
+
+    Returns:
+        "cd", "dvd", "bd", or None if unable to detect.
+    """
+    try:
+        result = subprocess.run(
+            ["udevadm", "info", "--query=property", f"--name={device}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("ID_CDROM_MEDIA="):
+                media = line.split("=", 1)[1].strip()
+                if media.startswith("cd"):
+                    return "cd"
+                elif media.startswith("dvd"):
+                    return "dvd"
+                elif media.startswith("bd"):
+                    return "bd"
+    except Exception:
+        pass
+    return None
+
+
 def detect_backend(
     disc_type: DiscType = DiscType.DATA,
     media_type: MediaType = MediaType.AUTO,
     write_speed: WriteSpeed = WriteSpeed.AUTO,
     custom_speed: int | None = None,
     dry_run: bool = False,
+    device: str = "/dev/sr0",
     # Audio CD specific options
     audio_burn_mode: str = "dao",
     audio_gap_seconds: int = 2,
@@ -1265,6 +1292,7 @@ def detect_backend(
         write_speed: Speed preset (auto, max, safe, custom).
         custom_speed: Custom speed value when write_speed=CUSTOM.
         dry_run: If True, return dry-run backend.
+        device: Device path for media probing when media_type is AUTO.
         audio_burn_mode: Burn mode for audio CDs ("dao" or "tao").
         audio_gap_seconds: Gap between tracks for audio CDs (0-8 seconds).
         audio_cd_text: Whether to embed CD-TEXT in audio CDs.
@@ -1278,14 +1306,33 @@ def detect_backend(
     if dry_run:
         return DryRunBackend()
 
+    # Resolve AUTO media type by probing the drive
+    effective_media_type = media_type
+    if media_type == MediaType.AUTO:
+        family = _probe_media_family(device)
+        logger.info(f"AUTO media detection: probed {device}, detected family={family}")
+        if family == "cd":
+            effective_media_type = MediaType.CD_R_24X
+        elif family == "dvd":
+            effective_media_type = MediaType.DVD_R_8X
+        elif family == "bd":
+            effective_media_type = MediaType.BD_R_4X
+
     if disc_type == DiscType.DATA:
         # Choose backend based on media type
         # CD media uses wodim/cdrecord, DVD/BD media uses growisofs
-        if _is_cd_media(media_type):
-            # Use wodim for CDs
+        if _is_cd_media(effective_media_type) or effective_media_type == MediaType.AUTO:
+            # Use wodim for CDs (and as default for AUTO when probe fails)
             if WodimBackend.is_available():
                 return WodimBackend(
-                    media_type=media_type,
+                    media_type=effective_media_type,
+                    write_speed=write_speed,
+                    custom_speed=custom_speed,
+                )
+            # Fall through to growisofs if wodim unavailable
+            if GrowIsofsBackend.is_available():
+                return GrowIsofsBackend(
+                    media_type=effective_media_type,
                     write_speed=write_speed,
                     custom_speed=custom_speed,
                 )
@@ -1294,10 +1341,10 @@ def detect_backend(
                 "Please install wodim or cdrecord."
             )
         else:
-            # Use growisofs for DVDs, Blu-rays, and AUTO
+            # Use growisofs for DVDs and Blu-rays
             if GrowIsofsBackend.is_available():
                 return GrowIsofsBackend(
-                    media_type=media_type,
+                    media_type=effective_media_type,
                     write_speed=write_speed,
                     custom_speed=custom_speed,
                 )
